@@ -1,12 +1,12 @@
 /**
- * @jest-environment jsdom
+ * @vitest-environment jsdom
  */
 import * as React from "react";
 import ReactDOMServer from "react-dom/server";
-import { test, expect, describe } from "@jest/globals";
+import { test, expect, describe, beforeEach } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { ReactSdkContext } from "@webstudio-is/react-sdk/runtime";
 import { __testing__, HtmlEmbed } from "./html-embed";
-import { ReactSdkContext } from "@webstudio-is/react-sdk";
 import { cartesian } from "./test-utils/cartesian";
 
 const scriptTestIdPrefix = __testing__.scriptTestIdPrefix;
@@ -32,10 +32,10 @@ const App = (props: {
     <ReactSdkContext.Provider
       value={{
         assetBaseUrl: "",
-        imageBaseUrl: "",
         imageLoader: () => "",
         renderer: props.renderer,
         resources: {},
+        breakpoints: [],
       }}
     >
       <div key={page}>
@@ -54,6 +54,13 @@ const App = (props: {
     </ReactSdkContext.Provider>
   );
 };
+
+beforeEach(() => {
+  // clear body
+  for (const child of document.body.children) {
+    child.remove();
+  }
+});
 
 describe("Published site", () => {
   /**
@@ -272,10 +279,10 @@ describe("Builder renderer= canvas | preview", () => {
         <ReactSdkContext.Provider
           value={{
             assetBaseUrl: "",
-            imageBaseUrl: "",
             imageLoader: () => "",
             renderer: "canvas",
             resources: {},
+            breakpoints: [],
           }}
         >
           <HtmlEmbed code={code} executeScriptOnCanvas={true} />

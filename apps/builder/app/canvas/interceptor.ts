@@ -1,17 +1,16 @@
-import { getPagePath, type System } from "@webstudio-is/sdk";
+import { getPagePath } from "@webstudio-is/sdk";
 import {
   compilePathnamePattern,
   matchPathnamePattern,
   tokenizePathnamePattern,
 } from "~/builder/shared/url-pattern";
+import { $selectedPage, selectPage } from "~/shared/awareness";
 import {
-  $dataSourceVariables,
   $isPreviewMode,
   $pages,
-  $selectedPage,
-  updateSystem,
+  $selectedPageHash,
 } from "~/shared/nano-states";
-import { savePathInHistory, switchPage } from "~/shared/pages";
+import { $currentSystem, updateCurrentSystem } from "~/shared/system";
 
 const isAbsoluteUrl = (href: string) => {
   try {
@@ -23,14 +22,12 @@ const isAbsoluteUrl = (href: string) => {
 };
 
 const getSelectedPagePathname = () => {
+  const pages = $pages.get();
   const page = $selectedPage.get();
-  const dataSourceVariables = $dataSourceVariables.get();
-  if (page) {
-    const system = dataSourceVariables.get(page.systemDataSourceId) as
-      | undefined
-      | System;
-    const tokens = tokenizePathnamePattern(page.path);
-    return compilePathnamePattern(tokens, system?.params ?? {});
+  if (page && pages) {
+    const tokens = tokenizePathnamePattern(getPagePath(page.id, pages));
+    const system = $currentSystem.get();
+    return compilePathnamePattern(tokens, system.params);
   }
 };
 
@@ -40,10 +37,21 @@ const switchPageAndUpdateSystem = (href: string, formData?: FormData) => {
     return;
   }
   // preserve pathname when not specified in href/action
-  if (href === "" || href.startsWith("?") || href.startsWith("#")) {
+  if (href === "" || href.startsWith("?")) {
     const pathname = getSelectedPagePathname();
     if (pathname) {
-      href = pathname + href;
+      href = `${pathname}${href}`;
+    }
+  }
+  // preserve also search params when navigate with hash
+  if (href.startsWith("#")) {
+    const pathname = getSelectedPagePathname();
+    if (pathname) {
+      const system = $currentSystem.get();
+      const searchParams = new URLSearchParams(
+        system.search as Record<string, string>
+      );
+      href = `${pathname}?${searchParams}${href}`;
     }
   }
   const pageHref = new URL(href, "https://any-valid.url");
@@ -58,9 +66,9 @@ const switchPageAndUpdateSystem = (href: string, formData?: FormData) => {
         }
       }
       const search = Object.fromEntries(pageHref.searchParams);
-      switchPage(page.id, pageHref.hash);
-      updateSystem(page, { params, search });
-      savePathInHistory(page.id, pageHref.pathname);
+      $selectedPageHash.set({ hash: pageHref.hash });
+      selectPage(page.id);
+      updateCurrentSystem({ params, search });
       break;
     }
   }
@@ -68,6 +76,15 @@ const switchPageAndUpdateSystem = (href: string, formData?: FormData) => {
 
 export const subscribeInterceptedEvents = () => {
   const handleClick = (event: MouseEvent) => {
+    // Prevent forwarding the click event on an input element when the associated label has a "for" attribute
+    if (
+      event.target instanceof Element &&
+      event.target.closest("label[for]") &&
+      !$isPreviewMode.get()
+    ) {
+      event.preventDefault();
+    }
+
     if (
       event.target instanceof HTMLElement ||
       event.target instanceof SVGElement

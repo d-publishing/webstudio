@@ -1,11 +1,14 @@
-import { styled, useId } from "@webstudio-is/design-system";
-import { forwardRef } from "react";
+import { forwardRef, useId } from "react";
 import type { ComponentProps, Ref } from "react";
-import type { HoverTarget, SpaceStyleProperty } from "./types";
-import { spaceProperties } from "./properties";
-import { theme } from "@webstudio-is/design-system";
+import { styled, theme } from "@webstudio-is/design-system";
+import type { CssProperty } from "@webstudio-is/css-engine";
+import {
+  spaceProperties,
+  type HoverTarget,
+  type SpaceStyleProperty,
+} from "./properties";
 
-const VALUE_WIDTH = 34;
+const VALUE_WIDTH = 36;
 const VALUE_HEIGHT = 24;
 
 const BORDER = 1;
@@ -41,15 +44,25 @@ const emulateInnerStroke = ({
 });
 
 const ValueArea = styled("path", {
-  fill: theme.colors.slate2,
+  fill: theme.colors.backgroundSpacingTopBottom,
   variants: {
     side: {
       top: { cursor: "n-resize" },
       bottom: { cursor: "s-resize" },
-      right: { cursor: "e-resize", fill: theme.colors.slate3 },
-      left: { cursor: "w-resize", fill: theme.colors.slate3 },
+      right: {
+        cursor: "e-resize",
+        fill: theme.colors.backgroundSpacingLeftRight,
+      },
+      left: {
+        cursor: "w-resize",
+        fill: theme.colors.backgroundSpacingLeftRight,
+      },
     },
-    isActive: { true: { fill: theme.colors.slate5 } },
+    isActive: {
+      true: {
+        fill: theme.colors.backgroundSpacingHover,
+      },
+    },
   },
 });
 
@@ -66,7 +79,7 @@ const OuterRect = styled(
       {...props}
     />
   ),
-  { stroke: theme.colors.slate8 }
+  { stroke: theme.colors.borderMain }
 );
 
 const InnerOuterRect = styled(
@@ -86,7 +99,7 @@ const InnerOuterRect = styled(
       />
     );
   },
-  { stroke: theme.colors.slate8, fill: theme.colors.loContrast }
+  { stroke: theme.colors.borderMain, fill: theme.colors.backgroundControls }
 );
 
 const InnerRect = styled(
@@ -102,7 +115,7 @@ const InnerRect = styled(
       {...props}
     />
   ),
-  { stroke: theme.colors.slate8 }
+  { stroke: theme.colors.borderMain }
 );
 
 const MostInnerRect = styled(
@@ -120,7 +133,7 @@ const MostInnerRect = styled(
       />
     );
   },
-  { stroke: theme.colors.slate8, fill: theme.colors.loContrast }
+  { stroke: theme.colors.borderMain, fill: theme.colors.backgroundControls }
 );
 
 const gap = `${INNER_MARGIN + BORDER}px`;
@@ -150,7 +163,7 @@ const Container = styled("div", {
   // (both in z-order and in top/left)
   [`&:focus-visible > ${Grid}`]: {
     borderRadius: theme.borderRadius[3],
-    outline: `2px solid ${theme.colors.blue10}`,
+    outline: `1px solid ${theme.colors.borderFocus}`,
   },
 });
 
@@ -160,23 +173,22 @@ const Cell = styled("div", {
   alignItems: "center",
   justifyContent: "center",
   maxWidth: "100%",
-  padding: theme.spacing[2],
   variants: {
     property: {
-      marginTop: { gridColumn: "2 / 5", gridRow: "1" },
-      marginRight: { gridColumn: "5", gridRow: "1 / 8" },
-      marginBottom: { gridColumn: "2 / 5", gridRow: "7" },
-      marginLeft: { gridColumn: "1", gridRow: "1 / 8" },
-      paddingTop: { gridColumn: "3 / 4", gridRow: "3" },
-      paddingRight: { gridColumn: "4", gridRow: "3 / 6" },
-      paddingBottom: { gridColumn: "3 / 4", gridRow: "5" },
-      paddingLeft: { gridColumn: "2", gridRow: "3 / 6" },
+      "margin-top": { gridColumn: "2 / 5", gridRow: "1" },
+      "margin-right": { gridColumn: "5", gridRow: "1 / 8" },
+      "margin-bottom": { gridColumn: "2 / 5", gridRow: "7" },
+      "margin-left": { gridColumn: "1", gridRow: "1 / 8" },
+      "padding-top": { gridColumn: "3 / 4", gridRow: "3" },
+      "padding-right": { gridColumn: "4", gridRow: "3 / 6" },
+      "padding-bottom": { gridColumn: "3 / 4", gridRow: "5" },
+      "padding-left": { gridColumn: "2", gridRow: "3 / 6" },
     },
   },
 });
 
 const Label = styled("div", {
-  color: theme.colors.slate11,
+  color: theme.colors.foregroundTextSubtle,
   textTransform: "uppercase",
   fontSize: theme.deprecatedFontSize[1],
   lineHeight: 1,
@@ -191,17 +203,17 @@ const Label = styled("div", {
 
 const getSide = (property: SpaceStyleProperty) => {
   switch (property) {
-    case "marginTop":
-    case "paddingTop":
+    case "margin-top":
+    case "padding-top":
       return "top";
-    case "marginRight":
-    case "paddingRight":
+    case "margin-right":
+    case "padding-right":
       return "right";
-    case "marginBottom":
-    case "paddingBottom":
+    case "margin-bottom":
+    case "padding-bottom":
       return "bottom";
-    case "marginLeft":
-    case "paddingLeft":
+    case "margin-left":
+    case "padding-left":
       return "left";
   }
 };
@@ -239,7 +251,7 @@ type LayoutProps = {
   onMouseLeave?: ComponentProps<"div">["onMouseLeave"];
   onMouseMove?: ComponentProps<"div">["onMouseMove"];
   onHover: (hoverTarget: HoverTarget | undefined) => void;
-  activeProperties?: ReadonlyArray<SpaceStyleProperty>;
+  activeProperties?: CssProperty[];
   renderCell: (args: { property: SpaceStyleProperty }) => React.ReactNode;
 };
 
@@ -292,20 +304,20 @@ export const SpaceLayout = forwardRef(
           xmlns="http://www.w3.org/2000/svg"
         >
           <g clipPath={`url(#${outerClipId})`}>
-            {renderValueArea("marginTop")}
-            {renderValueArea("marginRight")}
-            {renderValueArea("marginBottom")}
-            {renderValueArea("marginLeft")}
+            {renderValueArea("margin-top")}
+            {renderValueArea("margin-right")}
+            {renderValueArea("margin-bottom")}
+            {renderValueArea("margin-left")}
           </g>
 
           <OuterRect />
           <InnerOuterRect />
 
           <g clipPath={`url(#${innerClipId})`}>
-            {renderValueArea("paddingTop")}
-            {renderValueArea("paddingRight")}
-            {renderValueArea("paddingBottom")}
-            {renderValueArea("paddingLeft")}
+            {renderValueArea("padding-top")}
+            {renderValueArea("padding-right")}
+            {renderValueArea("padding-bottom")}
+            {renderValueArea("padding-left")}
           </g>
 
           <InnerRect />

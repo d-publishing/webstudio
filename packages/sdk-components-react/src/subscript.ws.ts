@@ -4,8 +4,8 @@ import {
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-import { sub } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { sub } from "@webstudio-is/sdk/normalize.css";
 import type { defaultTag } from "./subscript";
 import { props } from "./__generated__/subscript.props";
 
@@ -14,7 +14,7 @@ const presetStyle = {
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  type: "rich-text-child",
+  type: "container",
   label: "Subscript Text",
   icon: SubscriptIcon,
   states: defaultStates,

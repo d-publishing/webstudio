@@ -17,6 +17,7 @@ const listItemAttribute = "data-list-item";
 const listItemAttributes = { [listItemAttribute]: true };
 
 const DragHandleIconStyled = styled(DragHandleIcon, {
+  width: theme.spacing[7],
   visibility: "hidden",
   cursor: "grab",
   color: theme.colors.foregroundSubtle,
@@ -24,15 +25,13 @@ const DragHandleIconStyled = styled(DragHandleIcon, {
 });
 
 const ThumbHolder = styled("div", {
-  width: theme.spacing[10],
-  height: theme.spacing[10],
   flexShrink: 0,
 });
 
 /**
  * We draw button above rela button positions, therefore we need to have same padding
  */
-const sharedPaddingRight = theme.spacing[9];
+const sharedPaddingRight = theme.spacing[7];
 
 const IconButtonsWrapper = styled(Flex, {
   position: "absolute",
@@ -40,12 +39,12 @@ const IconButtonsWrapper = styled(Flex, {
   top: 0,
   bottom: 0,
   paddingRight: sharedPaddingRight,
-  visibility: "hidden",
+  display: "none",
 });
 
 const FakeIconButtonsWrapper = styled(Flex, {
   paddingLeft: theme.spacing[5],
-  visibility: "hidden",
+  display: "none",
 });
 
 /**
@@ -64,27 +63,16 @@ const ItemButton = styled("button", {
 
   paddingRight: sharedPaddingRight,
 
-  height: theme.spacing[13],
+  height: theme.spacing[11],
   position: "relative",
 
   "&:focus-visible, &[data-focused=true], &[data-state=open]": {
     [`& ${FakeIconButtonsWrapper}`]: {
-      visibility: "visible",
+      display: "flex",
     },
     [`~ ${IconButtonsWrapper}`]: {
-      visibility: "visible",
+      display: "flex",
     },
-
-    "&:after": {
-      borderRadius: theme.borderRadius[3],
-      outline: `2px solid ${theme.colors.borderFocus}`,
-      outlineOffset: "-2px",
-      position: "absolute",
-      content: '""',
-      inset: "0 2px",
-      pointerEvents: "none",
-    },
-
     outline: "none",
     backgroundColor: theme.colors.backgroundHover,
   },
@@ -127,10 +115,10 @@ const ItemWrapper = styled("div", {
       },
     },
     [`& ${IconButtonsWrapper}`]: {
-      visibility: "visible",
+      display: "flex",
     },
     [`& ${FakeIconButtonsWrapper}`]: {
-      visibility: "hidden",
+      display: "flex",
     },
   },
 });
@@ -192,11 +180,11 @@ export const CssValueListItem = forwardRef(
               {...listItemAttributes}
               {...rest}
               hidden={hidden}
-              disabled={hidden === true}
+              disabled={hidden === true || rest.disabled}
             >
               <DragHandleIconStyled />
 
-              <Flex gap={2} shrink>
+              <Flex shrink align="center">
                 {thumbnail ? <ThumbHolder>{thumbnail}</ThumbHolder> : null}
                 {label}
               </Flex>

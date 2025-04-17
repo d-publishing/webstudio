@@ -1,4 +1,4 @@
-import { expect, test } from "@jest/globals";
+import { expect, test } from "vitest";
 import { prefixStyles } from "./prefixer";
 
 test("prefix background-clip", () => {
@@ -34,6 +34,19 @@ test("prefix text-size-adjust", () => {
     new Map([
       ["-webkit-text-size-adjust", { type: "keyword", value: "auto" }],
       ["text-size-adjust", { type: "keyword", value: "auto" }],
+    ])
+  );
+});
+
+test("prefix backdrop-filter", () => {
+  expect(
+    prefixStyles(
+      new Map([["backdrop-filter", { type: "unparsed", value: "blur(4px)" }]])
+    )
+  ).toEqual(
+    new Map([
+      ["-webkit-backdrop-filter", { type: "unparsed", value: "blur(4px)" }],
+      ["backdrop-filter", { type: "unparsed", value: "blur(4px)" }],
     ])
   );
 });

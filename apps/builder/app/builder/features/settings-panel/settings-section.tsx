@@ -1,14 +1,12 @@
+import { useId } from "react";
 import { useStore } from "@nanostores/react";
-import { InputField, useId } from "@webstudio-is/design-system";
-import {
-  $instances,
-  $registeredComponentMetas,
-  $selectedInstance,
-} from "~/shared/nano-states";
+import type { Instance } from "@webstudio-is/sdk";
+import { InputField } from "@webstudio-is/design-system";
+import { $instances, $registeredComponentMetas } from "~/shared/nano-states";
 import { HorizontalLayout, Label, Row, useLocalValue } from "./shared";
 import { getInstanceLabel } from "~/shared/instance-utils";
 import { serverSyncStore } from "~/shared/sync";
-import type { Instance } from "@webstudio-is/sdk";
+import { $selectedInstance } from "~/shared/awareness";
 
 const saveLabel = (label: string, selectedInstance: Instance) => {
   serverSyncStore.createTransaction([$instances], (instances) => {
@@ -30,22 +28,18 @@ export const SettingsSection = () => {
   });
 
   if (selectedInstance === undefined) {
-    return null;
+    return;
   }
 
   const meta = metas.get(selectedInstance.component);
   if (meta === undefined) {
-    return null;
+    return;
   }
   const placeholder = getInstanceLabel(selectedInstance, meta);
 
   return (
     <Row>
-      <HorizontalLayout
-        label={<Label htmlFor={id}>Name</Label>}
-        deletable={false}
-        onDelete={() => {}}
-      >
+      <HorizontalLayout label={<Label htmlFor={id}>Name</Label>}>
         <InputField
           id={id}
           /* Key is required, otherwise when label is undefined, previous value stayed */

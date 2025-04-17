@@ -12,6 +12,8 @@
  */
 
 import { nanoid } from "nanoid";
+import { useFocusWithin } from "@react-aria/interactions";
+import { useStore } from "@nanostores/react";
 import {
   Box,
   ComboboxListbox,
@@ -19,8 +21,6 @@ import {
   ComboboxRoot,
   ComboboxAnchor,
   ComboboxContent,
-  DeprecatedTextFieldInput,
-  useDeprecatedTextFieldFocus,
   useCombobox,
   type CSS,
   ComboboxLabel,
@@ -31,10 +31,13 @@ import {
   rawTheme,
   theme,
   styled,
-  Flex,
   ComboboxScrollArea,
+  InputField,
+  Flex,
+  Text,
 } from "@webstudio-is/design-system";
-import { CheckMarkIcon, DotIcon, LocalStyleIcon } from "@webstudio-is/icons";
+import { CheckMarkIcon, DotIcon } from "@webstudio-is/icons";
+import type { StyleSource } from "@webstudio-is/sdk";
 import {
   forwardRef,
   useState,
@@ -43,17 +46,27 @@ import {
   type ForwardRefRenderFunction,
   type RefObject,
   type ReactNode,
+  useRef,
+  useCallback,
 } from "react";
 import { mergeRefs } from "@react-aria/utils";
-import { type ComponentState, stateCategories } from "@webstudio-is/react-sdk";
-import { type ItemSource, menuCssVars, StyleSource } from "./style-source";
+import { type ComponentState, stateCategories } from "@webstudio-is/sdk";
+import {
+  type ItemSource,
+  type StyleSourceError,
+  menuCssVars,
+  StyleSourceControl,
+} from "./style-source-control";
 import { useSortable } from "./use-sortable";
 import { matchSorter } from "match-sorter";
 import { StyleSourceBadge } from "./style-source-badge";
 import { humanizeString } from "~/shared/string-utils";
+import { $computedStyleDeclarations } from "../shared/model";
+import type { ComputedStyleDecl } from "~/shared/style-object-model";
+import type { WritableAtom } from "nanostores";
 
 type IntermediateItem = {
-  id: string;
+  id: StyleSource["id"];
   label: string;
   disabled: boolean;
   source: ItemSource;
@@ -62,7 +75,7 @@ type IntermediateItem = {
 };
 
 export type ItemSelector = {
-  styleSourceId: IntermediateItem["id"];
+  styleSourceId: StyleSource["id"];
   state?: string;
 };
 
@@ -72,19 +85,21 @@ const TextFieldContainer = styled("div", {
   flexWrap: "wrap",
   alignItems: "center",
   backgroundColor: theme.colors.backgroundControls,
-  gap: theme.spacing[3],
-  p: theme.spacing[3],
+  gap: theme.spacing[2],
+  padding: theme.spacing[2],
   borderRadius: theme.borderRadius[4],
   minWidth: 0,
-  border: `1px solid ${theme.colors.borderMain}`,
+  border: `1px solid transparent`,
+  "&:hover": {
+    borderColor: theme.colors.borderMain,
+  },
   "&:focus-within": {
-    outline: `2px solid ${theme.colors.borderFocus}`,
-    outlineOffset: -1,
+    borderColor: theme.colors.borderFocus,
   },
 });
 
 type TextFieldBaseWrapperProps<Item extends IntermediateItem> = Omit<
-  ComponentProps<"input">,
+  ComponentProps<typeof InputField>,
   "value"
 > &
   Pick<ComponentProps<typeof TextFieldContainer>, "css"> & {
@@ -93,14 +108,36 @@ type TextFieldBaseWrapperProps<Item extends IntermediateItem> = Omit<
     label: string;
     containerRef?: RefObject<HTMLDivElement>;
     inputRef?: RefObject<HTMLInputElement>;
-    renderStyleSourceMenuItems: (item: Item) => ReactNode;
+    renderStyleSourceMenuItems: (item: Item, hasStyles: boolean) => ReactNode;
     onChangeItem?: (item: Item) => void;
     onSort?: (items: Array<Item>) => void;
     onSelectItem?: (itemSelector: ItemSelector) => void;
     onEditItem?: (id?: Item["id"]) => void;
     editingItemId?: Item["id"];
     states: { label: string; selector: string }[];
+    error?: StyleSourceError;
   };
+
+// Returns true if style source has defined styles including on the states.
+const getHasStylesMap = <Item extends IntermediateItem>(
+  styleSourceItems: Array<Item>,
+  computedStyleDeclarations: Array<ComputedStyleDecl>
+) => {
+  const map = new Map<Item["id"], boolean>();
+  for (const item of styleSourceItems) {
+    // Style source has styles on states.
+    if (item.states.length > 0) {
+      map.set(item.id, true);
+    }
+    for (const style of computedStyleDeclarations) {
+      if (item.id === style.source.styleSourceId) {
+        map.set(item.id, true);
+        break;
+      }
+    }
+  }
+  return map;
+};
 
 const TextFieldBase: ForwardRefRenderFunction<
   HTMLDivElement,
@@ -113,7 +150,6 @@ const TextFieldBase: ForwardRefRenderFunction<
     onFocus,
     onBlur,
     onClick,
-    type,
     onKeyDown,
     label,
     value,
@@ -125,19 +161,43 @@ const TextFieldBase: ForwardRefRenderFunction<
     onEditItem,
     editingItemId,
     states,
+    error,
     ...textFieldProps
   } = props;
-  const [internalInputRef, focusProps] = useDeprecatedTextFieldFocus({
-    onFocus,
-    onBlur,
-  });
   const { sortableRefCallback, dragItemId, placementIndicator } = useSortable({
     items: value,
     onSort,
   });
+  const internalInputRef = useRef<HTMLInputElement>(null);
+
+  const { focusWithinProps } = useFocusWithin({
+    onFocusWithin: onFocus,
+    onBlurWithin: onBlur,
+  });
+
+  const onClickCapture = useCallback(() => {
+    internalInputRef.current?.focus();
+  }, [internalInputRef]);
+
+  const computedStyleDeclarations = useStore($computedStyleDeclarations);
+
+  const hasStyles = useCallback(
+    (styleSourceId: string) => {
+      const hasStylesMap = getHasStylesMap(value, computedStyleDeclarations);
+      return hasStylesMap.get(styleSourceId) ?? false;
+    },
+    [value, computedStyleDeclarations]
+  );
+
   return (
     <TextFieldContainer
-      {...focusProps}
+      {...focusWithinProps}
+      onClickCapture={onClickCapture}
+      // Setting tabIndex to -1 to allow this element to be focused via JavaScript.
+      // This is used when we need to hide the caret but want to:
+      //   1. keep the visual focused state of the component
+      //   2. keep focus somewhere insisde the component to not trigger some focus-trap logic
+      tabIndex={-1}
       ref={mergeRefs(forwardedRef, containerRef ?? null, sortableRefCallback)}
       css={css}
       style={
@@ -146,29 +206,29 @@ const TextFieldBase: ForwardRefRenderFunction<
       onKeyDown={onKeyDown}
     >
       {/* We want input to be the first element in DOM so it receives the focus first */}
-      {editingItemId === undefined && (
-        <DeprecatedTextFieldInput
-          {...textFieldProps}
-          css={{
-            color: theme.colors.hiContrast,
-            fontVariantNumeric: "tabular-nums",
-            fontFamily: theme.fonts.sans,
-            fontSize: theme.deprecatedFontSize[3],
-            lineHeight: 1,
-            order: 1,
-          }}
-          value={label}
-          type={type}
-          onClick={onClick}
-          ref={mergeRefs(internalInputRef, inputRef ?? null)}
-          spellCheck={false}
-          aria-label="New Style Source Input"
-        />
-      )}
+      <InputField
+        {...textFieldProps}
+        variant="chromeless"
+        css={{
+          fontVariantNumeric: "tabular-nums",
+          lineHeight: 1,
+          order: 1,
+          flex: 1,
+          "&:focus-within, &:hover": {
+            borderColor: "transparent",
+          },
+        }}
+        size="1"
+        value={label}
+        onClick={onClick}
+        inputRef={mergeRefs(internalInputRef, inputRef)}
+        spellCheck={false}
+        aria-label="New Style Source Input"
+      />
       {value.map((item) => (
-        <StyleSource
+        <StyleSourceControl
           key={item.id}
-          menuItems={renderStyleSourceMenuItems(item)}
+          menuItems={renderStyleSourceMenuItems(item, hasStyles(item.id))}
           id={item.id}
           selected={item.id === selectedItemSelector?.styleSourceId}
           state={
@@ -176,15 +236,19 @@ const TextFieldBase: ForwardRefRenderFunction<
               ? selectedItemSelector.state
               : undefined
           }
+          label={item.label}
           stateLabel={
             item.id === selectedItemSelector?.styleSourceId
-              ? states.find((s) => s.selector === selectedItemSelector.state)
-                  ?.label
+              ? states.find(
+                  (state) => state.selector === selectedItemSelector.state
+                )?.label
               : undefined
           }
+          error={item.id === error?.id ? error : undefined}
           disabled={item.disabled}
           isDragging={item.id === dragItemId}
           isEditing={item.id === editingItemId}
+          hasStyles={hasStyles(item.id)}
           source={item.source}
           onChangeEditing={(isEditing) => {
             onEditItem?.(isEditing ? item.id : undefined);
@@ -194,15 +258,7 @@ const TextFieldBase: ForwardRefRenderFunction<
             onEditItem?.();
             onChangeItem?.({ ...item, label });
           }}
-        >
-          {item.source === "local" ? (
-            <Flex align="center" justify="center">
-              <LocalStyleIcon />
-            </Flex>
-          ) : (
-            item.label
-          )}
-        </StyleSource>
+        />
       ))}
       {placementIndicator}
     </TextFieldContainer>
@@ -213,13 +269,15 @@ const TextField = forwardRef(TextFieldBase);
 TextField.displayName = "TextField";
 
 type StyleSourceInputProps<Item extends IntermediateItem> = {
+  $styleSourceInputElement: WritableAtom<HTMLInputElement | undefined>;
+  error?: StyleSourceError;
   items?: Array<Item>;
   value?: Array<Item>;
   selectedItemSelector: undefined | ItemSelector;
   editingItemId?: Item["id"];
   componentStates?: ComponentState[];
   onSelectAutocompleteItem?: (item: Item) => void;
-  onRemoveItem?: (id: Item["id"]) => void;
+  onDetachItem?: (id: Item["id"]) => void;
   onDeleteItem?: (id: Item["id"]) => void;
   onClearStyles?: (id: Item["id"]) => void;
   onDuplicateItem?: (id: Item["id"]) => void;
@@ -247,7 +305,7 @@ const matchOrSuggestToCreate = (
   const matched = matchSorter(items, search, {
     keys: [itemToString],
   });
-  const order: ItemSource[] = ["token", "componentToken"];
+  const order: ItemSource[] = ["token"];
   matched.sort((leftItem, rightItem) => {
     return order.indexOf(leftItem.source) - order.indexOf(rightItem.source);
   });
@@ -285,6 +343,7 @@ const markAddedValues = <Item extends IntermediateItem>(
 const renderMenuItems = (props: {
   selectedItemSelector: undefined | ItemSelector;
   item: IntermediateItem;
+  hasStyles: boolean;
   states: ComponentState[];
   onSelect?: (itemSelector: ItemSelector) => void;
   onEdit?: (itemId: IntermediateItem["id"]) => void;
@@ -292,16 +351,25 @@ const renderMenuItems = (props: {
   onConvertToToken?: (itemId: IntermediateItem["id"]) => void;
   onDisable?: (itemId: IntermediateItem["id"]) => void;
   onEnable?: (itemId: IntermediateItem["id"]) => void;
-  onRemove?: (itemId: IntermediateItem["id"]) => void;
+  onDetach?: (itemId: IntermediateItem["id"]) => void;
   onDelete?: (itemId: IntermediateItem["id"]) => void;
   onClearStyles?: (itemId: IntermediateItem["id"]) => void;
 }) => {
   return (
     <>
-      <DropdownMenuLabel>{props.item.label}</DropdownMenuLabel>
+      <DropdownMenuLabel>
+        <Flex gap="1" justify="between" align="center">
+          <Text css={{ fontWeight: "bold" }} truncate>
+            {props.item.label}
+          </Text>
+          {props.hasStyles && (
+            <DotIcon size="12" color={rawTheme.colors.foregroundPrimary} />
+          )}
+        </Flex>
+      </DropdownMenuLabel>
       {props.item.source !== "local" && (
         <DropdownMenuItem onSelect={() => props.onEdit?.(props.item.id)}>
-          Edit Name
+          Rename
         </DropdownMenuItem>
       )}
       {props.item.source !== "local" && (
@@ -336,8 +404,8 @@ const renderMenuItems = (props: {
     )}
     */}
       {props.item.source !== "local" && (
-        <DropdownMenuItem onSelect={() => props.onRemove?.(props.item.id)}>
-          Remove
+        <DropdownMenuItem onSelect={() => props.onDetach?.(props.item.id)}>
+          Detach
         </DropdownMenuItem>
       )}
       {props.item.source !== "local" && (
@@ -369,17 +437,16 @@ const renderMenuItems = (props: {
                 withIndicator={true}
                 icon={
                   props.item.id === props.selectedItemSelector?.styleSourceId &&
-                  selector === props.selectedItemSelector.state ? (
+                  selector === props.selectedItemSelector.state && (
                     <CheckMarkIcon
                       color={
                         props.item.states.includes(selector)
                           ? rawTheme.colors.foregroundPrimary
                           : rawTheme.colors.foregroundIconMain
                       }
+                      size={12}
                     />
-                  ) : props.item.states.includes(selector) ? (
-                    <DotIcon color={rawTheme.colors.foregroundPrimary} />
-                  ) : null
+                  )
                 }
                 onSelect={() =>
                   props.onSelect?.({
@@ -392,7 +459,15 @@ const renderMenuItems = (props: {
                   })
                 }
               >
-                {label}
+                <Flex justify="between" align="center" grow>
+                  {label}
+                  {props.item.states.includes(selector) && (
+                    <DotIcon
+                      size="12"
+                      color={rawTheme.colors.foregroundPrimary}
+                    />
+                  )}
+                </Flex>
               </DropdownMenuItem>
             ))}
           </Fragment>
@@ -428,7 +503,7 @@ export const StyleSourceInput = (
     getItemProps,
     isOpen,
   } = useCombobox<IntermediateItem>({
-    items: markAddedValues(props.items ?? [], value),
+    getItems: () => markAddedValues(props.items ?? [], value),
     value: {
       label,
       disabled: false,
@@ -444,13 +519,11 @@ export const StyleSourceInput = (
       setLabel("");
       if (item.id === newItemId) {
         props.onCreateItem?.(nanoid(), item.label);
-      } else if (item.source === "componentToken") {
-        props.onCreateItem?.(item.id, item.label);
       } else {
         props.onSelectAutocompleteItem?.(item);
       }
     },
-    onInputChange(label) {
+    onChange(label) {
       setLabel(label ?? "");
     },
   });
@@ -464,7 +537,7 @@ export const StyleSourceInput = (
       ) {
         const item = value[value.length - 2];
         if (item) {
-          props.onRemoveItem?.(item.id);
+          props.onDetachItem?.(item.id);
         }
       }
     },
@@ -472,7 +545,6 @@ export const StyleSourceInput = (
 
   let hasNewTokenItem = false;
   let hasGlobalTokenItem = false;
-  let hasComponentTokenItem = false;
 
   const states = props.componentStates ?? [];
 
@@ -483,10 +555,15 @@ export const StyleSourceInput = (
           <TextField
             // @todo inputProps is any which breaks all types passed to TextField
             {...inputProps}
-            renderStyleSourceMenuItems={(item) =>
+            inputRef={(element) =>
+              props.$styleSourceInputElement.set(element ?? undefined)
+            }
+            error={props.error}
+            renderStyleSourceMenuItems={(item, hasStyles) =>
               renderMenuItems({
                 selectedItemSelector: props.selectedItemSelector,
                 item,
+                hasStyles,
                 states,
                 onSelect: props.onSelectItem,
                 onDuplicate: props.onDuplicateItem,
@@ -494,7 +571,7 @@ export const StyleSourceInput = (
                 onEnable: props.onEnableItem,
                 onDisable: props.onDisableItem,
                 onEdit: props.onEditItem,
-                onRemove: props.onRemoveItem,
+                onDetach: props.onDetachItem,
                 onDelete: props.onDeleteItem,
                 onClearStyles: props.onClearStyles,
               })
@@ -553,20 +630,6 @@ export const StyleSourceInput = (
                     );
                   }
 
-                  if (
-                    item.source === "componentToken" &&
-                    hasComponentTokenItem === false
-                  ) {
-                    hasComponentTokenItem = true;
-                    label = (
-                      <>
-                        {(hasNewTokenItem || hasGlobalTokenItem) && (
-                          <ComboboxSeparator />
-                        )}
-                        <ComboboxLabel>Component Tokens</ComboboxLabel>
-                      </>
-                    );
-                  }
                   const { key, ...itemProps } = getItemProps({ item, index });
                   return (
                     <Fragment key={index}>

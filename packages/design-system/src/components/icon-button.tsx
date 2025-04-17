@@ -11,6 +11,15 @@ const openOrHoverStateStyle = {
   backgroundColor: theme.colors.backgroundHover,
 };
 
+const disabledVariantStyles = {
+  "&:disabled, &[aria-disabled=true]": {
+    color: theme.colors.foregroundDisabled,
+    "&:hover": {
+      backgroundColor: theme.colors.backgroundHover,
+    },
+  },
+};
+
 export const IconButton = styled("button", {
   // reset styles
   boxSizing: "border-box",
@@ -24,19 +33,18 @@ export const IconButton = styled("button", {
   alignItems: "center",
   // prevent shrinking inside flex box
   flexShrink: 0,
-  width: theme.spacing[12],
-  height: theme.spacing[12],
+  minWidth: theme.sizes.controlHeight,
+  width: "max-content",
+  height: theme.sizes.controlHeight,
   borderRadius: theme.borderRadius[3],
-  minWidth: 0,
+  outline: "none",
 
   "&[data-focused=true], &:focus-visible": {
-    outline: `2px solid ${theme.colors.borderFocus}`,
-    outlineOffset: -2,
+    borderColor: theme.colors.borderFocus,
   },
 
-  "&:disabled": {
+  "&:disabled, &[aria-disabled=true]": {
     borderColor: "transparent",
-    pointerEvents: "none",
     backgroundColor: "transparent",
   },
 
@@ -57,10 +65,10 @@ export const IconButton = styled("button", {
 
           "&:hover, &[data-hovered=true]": openOrHoverStateStyle,
         },
-
-        "&:disabled": {
-          color: theme.colors.foregroundDisabled,
+        "&[data-focused=true], &:focus-visible": {
+          borderColor: theme.colors.borderFocus,
         },
+        ...disabledVariantStyles,
       },
 
       preset: {
@@ -70,9 +78,7 @@ export const IconButton = styled("button", {
         "&:hover, &[data-hovered=true]": {
           backgroundColor: theme.colors.backgroundPresetHover,
         },
-        "&:disabled": {
-          color: theme.colors.foregroundDisabled,
-        },
+        ...disabledVariantStyles,
       },
 
       local: {
@@ -82,9 +88,7 @@ export const IconButton = styled("button", {
         "&:hover, &[data-hovered=true]": {
           backgroundColor: theme.colors.backgroundLocalHover,
         },
-        "&:disabled": {
-          color: theme.colors.foregroundDisabled,
-        },
+        ...disabledVariantStyles,
       },
 
       overwritten: {
@@ -94,9 +98,7 @@ export const IconButton = styled("button", {
         "&:hover, &[data-hovered=true]": {
           backgroundColor: theme.colors.backgroundOverwrittenHover,
         },
-        "&:disabled": {
-          color: theme.colors.foregroundDisabled,
-        },
+        ...disabledVariantStyles,
       },
 
       remote: {
@@ -106,9 +108,7 @@ export const IconButton = styled("button", {
         "&:hover, &[data-hovered=true]": {
           backgroundColor: theme.colors.backgroundRemoteHover,
         },
-        "&:disabled": {
-          color: theme.colors.foregroundDisabled,
-        },
+        ...disabledVariantStyles,
       },
     },
     state: {

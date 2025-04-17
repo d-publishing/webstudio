@@ -1,18 +1,16 @@
-import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
-import {
-  getClosestInstance,
-  getIndexWithinAncestorFromComponentProps,
-  getInstanceSelectorById,
-  ReactSdkContext,
-  type Hook,
-} from "@webstudio-is/react-sdk";
 import {
   Children,
   forwardRef,
   type ComponentPropsWithoutRef,
-  type ReactNode,
   useContext,
 } from "react";
+import * as NavigationMenuPrimitive from "@radix-ui/react-navigation-menu";
+import { getIndexWithinAncestorFromProps } from "@webstudio-is/sdk/runtime";
+import {
+  getClosestInstance,
+  ReactSdkContext,
+  type Hook,
+} from "@webstudio-is/react-sdk/runtime";
 
 export const NavigationMenu = forwardRef<
   HTMLLIElement,
@@ -45,7 +43,7 @@ export const NavigationMenuItem = forwardRef<
   HTMLLIElement,
   Omit<ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Item>, "asChild">
 >(({ value, ...props }, ref) => {
-  const index = getIndexWithinAncestorFromComponentProps(props);
+  const index = getIndexWithinAncestorFromProps(props);
   return (
     <NavigationMenuPrimitive.Item ref={ref} value={value ?? index} {...props} />
   );
@@ -53,7 +51,7 @@ export const NavigationMenuItem = forwardRef<
 
 export const NavigationMenuLink = forwardRef<
   HTMLAnchorElement,
-  { children: ReactNode }
+  ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Link>
 >(({ children, ...props }, ref) => {
   const firstChild = Children.toArray(children)[0];
 
@@ -66,7 +64,7 @@ export const NavigationMenuLink = forwardRef<
 
 export const NavigationMenuTrigger = forwardRef<
   HTMLButtonElement,
-  { children: ReactNode }
+  ComponentPropsWithoutRef<typeof NavigationMenuPrimitive.Trigger>
 >(({ children, ...props }, ref) => {
   const firstChild = Children.toArray(children)[0];
 
@@ -91,14 +89,8 @@ export const hooksNavigationMenu: Hook = {
           instance,
           `${namespace}:NavigationMenu`
         );
-
         if (menu) {
-          const menuSelector = getInstanceSelectorById(
-            event.instanceSelector,
-            menu.id
-          );
-
-          context.setMemoryProp(menuSelector, "value", undefined);
+          context.setMemoryProp(menu, "value", undefined);
         }
       }
     }
@@ -111,28 +103,19 @@ export const hooksNavigationMenu: Hook = {
           instance,
           `${namespace}:NavigationMenu`
         );
-
         const menuItem = getClosestInstance(
           event.instancePath,
           instance,
           `${namespace}:NavigationMenuItem`
         );
-
         if (menuItem === undefined || menu === undefined) {
           return;
         }
-
         const contentValue =
-          context.getPropValue(menuItem.id, "value") ??
+          context.getPropValue(menuItem, "value") ??
           context.indexesWithinAncestors.get(menuItem.id)?.toString();
-
         if (contentValue) {
-          const menuSelector = getInstanceSelectorById(
-            event.instanceSelector,
-            menu.id
-          );
-
-          context.setMemoryProp(menuSelector, "value", contentValue);
+          context.setMemoryProp(menu, "value", contentValue);
         }
       }
     }

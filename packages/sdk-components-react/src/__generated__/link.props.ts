@@ -1,4 +1,4 @@
-import type { PropMeta } from "@webstudio-is/react-sdk";
+import type { PropMeta } from "@webstudio-is/sdk";
 
 export const props: Record<string, PropMeta> = {
   about: { required: false, control: "text", type: "string" },
@@ -430,6 +430,13 @@ export const props: Record<string, PropMeta> = {
     description:
       "Defines the text direction. Allowed values are ltr (Left-To-Right) or rtl (Right-To-Left)",
   },
+  download: {
+    required: false,
+    control: "boolean",
+    type: "boolean",
+    description:
+      "Indicates that the hyperlink is to be used for downloading a resource.",
+  },
   draggable: {
     required: false,
     control: "boolean",
@@ -512,7 +519,16 @@ export const props: Record<string, PropMeta> = {
     description:
       "The ping attribute specifies a space-separated list of URLs to be notified if a user follows the hyperlink.",
   },
+  prefetch: {
+    required: false,
+    control: "select",
+    type: "string",
+    options: ["none", "intent", "render", "viewport"],
+    description:
+      "Controls when and if the link prefetches the resources that the next page needs to make loading faster. “Intent” will prefetch when the link is hovered or focused. “Render” will prefetch when the link is rendered. “Viewport” will prefetch when the link is in the viewport. “None” will not prefetch.",
+  },
   prefix: { required: false, control: "text", type: "string" },
+  preventScrollReset: { required: false, control: "boolean", type: "boolean" },
   property: { required: false, control: "text", type: "string" },
   radioGroup: { required: false, control: "text", type: "string" },
   referrerPolicy: {
@@ -539,6 +555,8 @@ export const props: Record<string, PropMeta> = {
     description:
       "Specifies the relationship of the target object to the link object.",
   },
+  reloadDocument: { required: false, control: "boolean", type: "boolean" },
+  replace: { required: false, control: "boolean", type: "boolean" },
   resource: { required: false, control: "text", type: "string" },
   results: { required: false, control: "number", type: "number" },
   rev: { required: false, control: "text", type: "string" },

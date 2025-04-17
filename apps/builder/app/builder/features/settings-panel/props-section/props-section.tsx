@@ -1,33 +1,49 @@
+import { computed } from "nanostores";
 import { useState } from "react";
 import { useStore } from "@nanostores/react";
 import { matchSorter } from "match-sorter";
-import type { Instance } from "@webstudio-is/sdk";
-import { theme, Combobox, Separator, Flex } from "@webstudio-is/design-system";
-import { descendantComponent } from "@webstudio-is/react-sdk";
+import { type Instance, Props, descendantComponent } from "@webstudio-is/sdk";
+import {
+  theme,
+  Combobox,
+  Separator,
+  Flex,
+  Box,
+  Grid,
+} from "@webstudio-is/design-system";
+import { isAttributeNameSafe } from "@webstudio-is/react-sdk";
 import {
   $propValuesByInstanceSelector,
   $propsIndex,
   $props,
-  $selectedInstanceSelector,
+  $isDesignMode,
+  $isContentMode,
+  $memoryProps,
+  $selectedBreakpoint,
 } from "~/shared/nano-states";
 import { CollapsibleSectionWithAddButton } from "~/builder/shared/collapsible-section";
 import { renderControl } from "../controls/combined";
-import {
-  usePropsLogic,
-  type NameAndLabel,
-  type PropAndMeta,
-} from "./use-props-logic";
-import { Row } from "../shared";
+import { usePropsLogic, type PropAndMeta } from "./use-props-logic";
 import { serverSyncStore } from "~/shared/sync";
+import { $selectedInstanceKey } from "~/shared/awareness";
+import { AnimationSection } from "./animation/animation-section";
+import { nanoid } from "nanoid";
+import { $matchingBreakpoints } from "../../style-panel/shared/model";
+import { matchMediaBreakpoints } from "./match-media-breakpoints";
 
-const itemToString = (item: NameAndLabel | null) =>
-  item?.label || item?.name || "";
+type Item = {
+  name: string;
+  label?: string;
+  description?: string;
+};
+
+const itemToString = (item: Item | null) => item?.label || item?.name || "";
 
 const matchOrSuggestToCreate = (
   search: string,
-  items: Array<NameAndLabel>,
-  itemToString: (item: NameAndLabel) => string
-): Array<NameAndLabel> => {
+  items: Array<Item>,
+  itemToString: (item: Item) => string
+): Array<Item> => {
   const matched = matchSorter(items, search, {
     keys: [itemToString],
   });
@@ -39,7 +55,7 @@ const matchOrSuggestToCreate = (
   ) {
     matched.unshift({
       name: search.trim(),
-      label: `Create "${search.trim()}"`,
+      label: `Create attribute: "${search.trim()}"`,
     });
   }
   return matched;
@@ -47,27 +63,15 @@ const matchOrSuggestToCreate = (
 
 const renderProperty = (
   { propsLogic: logic, propValues, component, instanceId }: PropsSectionProps,
-  { prop, propName, meta }: PropAndMeta,
-  { deletable, autoFocus }: { deletable?: boolean; autoFocus?: boolean } = {}
+  { prop, propName, meta }: PropAndMeta
 ) =>
   renderControl({
-    autoFocus,
     key: propName,
     instanceId,
     meta,
     prop,
     computedValue: propValues.get(propName) ?? meta.defaultValue,
     propName,
-    deletable: deletable ?? false,
-    onDelete: () => {
-      if (prop) {
-        logic.handleDelete(prop);
-        if (component === "Image" && propName === "src") {
-          logic.handleDeleteByPropName("width");
-          logic.handleDeleteByPropName("height");
-        }
-      }
-    },
     onChange: (propValue) => {
       logic.handleChange({ prop, propName }, propValue);
 
@@ -82,38 +86,52 @@ const renderProperty = (
     },
   });
 
-const forbiddenProperties = new Set(["style"]);
+const forbiddenProperties = new Set(["style", "class", "className"]);
 
-const AddProperty = ({
+const AddPropertyOrAttribute = ({
   availableProps,
   onPropSelected,
 }: {
-  availableProps: NameAndLabel[];
+  availableProps: Item[];
   onPropSelected: (propName: string) => void;
 }) => {
   const [value, setValue] = useState("");
+  const [isValid, setIsValid] = useState(true);
   return (
     <Flex
       css={{ height: theme.spacing[13] }}
       direction="column"
       justify="center"
     >
-      <Combobox<NameAndLabel>
+      <Combobox<Item>
+        defaultHighlightedIndex={0}
         autoFocus
-        placeholder="Find or create a property"
-        // @todo add descriptions
-        items={availableProps}
+        color={isValid ? undefined : "error"}
+        placeholder="Select or create"
+        getItems={() => availableProps}
         itemToString={itemToString}
         onItemSelect={(item) => {
-          if (forbiddenProperties.has(item.name)) {
+          if (
+            forbiddenProperties.has(item.name) ||
+            isAttributeNameSafe(item.name) === false
+          ) {
+            setIsValid(false);
             return;
           }
+          setIsValid(true);
           onPropSelected(item.name);
         }}
         match={matchOrSuggestToCreate}
         value={{ name: "", label: value }}
-        onInputChange={(value) => {
+        onChange={(value) => {
           setValue(value ?? "");
+        }}
+        getDescription={(item) => {
+          return (
+            <Box css={{ width: theme.spacing[28] }}>
+              {item?.description ?? "No description available"}
+            </Box>
+          );
         }}
       />
     </Flex>
@@ -125,64 +143,135 @@ type PropsSectionProps = {
   propValues: Map<string, unknown>;
   component: Instance["component"];
   instanceId: string;
+  selectedInstanceKey: string;
 };
 
 // A UI componet with minimum logic that can be demoed in Storybook etc.
 export const PropsSection = (props: PropsSectionProps) => {
   const { propsLogic: logic } = props;
-
   const [addingProp, setAddingProp] = useState(false);
+  const isDesignMode = useStore($isDesignMode);
+  const isContentMode = useStore($isContentMode);
+  const matchingBreakpoints = useStore($matchingBreakpoints);
+  const selectedBreakpoint = useStore($selectedBreakpoint);
+
+  const matchMediaValue = matchMediaBreakpoints(matchingBreakpoints);
 
   const hasItems =
     logic.addedProps.length > 0 || addingProp || logic.initialProps.length > 0;
 
-  return (
+  const animationAction = logic.initialProps.find(
+    (prop) => prop.meta.type === "animationAction"
+  );
+
+  const hasAnimation = animationAction !== undefined;
+
+  const showPropertiesSection =
+    isDesignMode || (isContentMode && logic.initialProps.length > 0);
+
+  return hasAnimation && selectedBreakpoint?.id !== undefined ? (
     <>
-      <Row css={{ py: theme.spacing[3] }}>
-        {logic.systemProps.map((item) => renderProperty(props, item))}
-      </Row>
+      <AnimationSection
+        animationAction={animationAction}
+        isAnimationEnabled={matchMediaValue}
+        selectedBreakpointId={selectedBreakpoint?.id}
+        onChange={(value, isEphemeral) => {
+          const memoryProps = new Map($memoryProps.get());
+          const memoryInstanceProp: Props = new Map(
+            memoryProps.get(props.selectedInstanceKey)
+          );
+
+          if (isEphemeral && value !== undefined) {
+            memoryInstanceProp.set(animationAction.propName, {
+              id: nanoid(),
+              instanceId: props.instanceId,
+              type: "animationAction",
+              name: animationAction.propName,
+              value,
+            });
+            memoryProps.set(props.selectedInstanceKey, memoryInstanceProp);
+            $memoryProps.set(memoryProps);
+            return;
+          }
+
+          if (memoryInstanceProp.has(animationAction.propName)) {
+            memoryInstanceProp.delete(animationAction.propName);
+            memoryProps.set(props.selectedInstanceKey, memoryInstanceProp);
+
+            $memoryProps.set(memoryProps);
+          }
+
+          if (isEphemeral || value === undefined) {
+            return;
+          }
+
+          isEphemeral satisfies false;
+
+          logic.handleChangeByPropName(animationAction.propName, {
+            type: "animationAction",
+            value,
+          });
+        }}
+      />
+    </>
+  ) : (
+    <>
+      <Grid
+        css={{
+          paddingBottom: theme.panel.paddingBlock,
+        }}
+      >
+        {logic.systemProps.map((item) => (
+          <Box
+            key={item.propName}
+            css={{ paddingInline: theme.panel.paddingInline }}
+          >
+            {renderProperty(props, item)}
+          </Box>
+        ))}
+      </Grid>
 
       <Separator />
-
-      <CollapsibleSectionWithAddButton
-        label="Properties"
-        onAdd={() => setAddingProp(true)}
-        hasItems={hasItems}
-      >
-        <Flex gap="1" direction="column">
-          {addingProp && (
-            <AddProperty
-              availableProps={logic.availableProps}
-              onPropSelected={(propName) => {
-                setAddingProp(false);
-                logic.handleAdd(propName);
-              }}
-            />
-          )}
-          {logic.addedProps.map((item, index) =>
-            renderProperty(props, item, {
-              deletable: true,
-              autoFocus: index === 0,
-            })
-          )}
-          {logic.initialProps.map((item) => renderProperty(props, item))}
-        </Flex>
-      </CollapsibleSectionWithAddButton>
+      {showPropertiesSection && (
+        <CollapsibleSectionWithAddButton
+          label="Properties & Attributes"
+          onAdd={isDesignMode ? () => setAddingProp(true) : undefined}
+          hasItems={hasItems}
+        >
+          <Flex gap="1" direction="column">
+            {addingProp && (
+              <AddPropertyOrAttribute
+                availableProps={logic.availableProps}
+                onPropSelected={(propName) => {
+                  setAddingProp(false);
+                  logic.handleAdd(propName);
+                }}
+              />
+            )}
+            {logic.addedProps.map((item) => renderProperty(props, item))}
+            {logic.initialProps.map((item) => renderProperty(props, item))}
+          </Flex>
+        </CollapsibleSectionWithAddButton>
+      )}
     </>
   );
 };
 
+const $propValues = computed(
+  [$propValuesByInstanceSelector, $selectedInstanceKey],
+  (propValuesByInstanceSelector, instanceKey) =>
+    propValuesByInstanceSelector.get(instanceKey ?? "")
+);
+
 export const PropsSectionContainer = ({
   selectedInstance: instance,
+  selectedInstanceKey,
 }: {
   selectedInstance: Instance;
+  selectedInstanceKey: string;
 }) => {
   const { propsByInstanceId } = useStore($propsIndex);
-  const propValuesByInstanceSelector = useStore($propValuesByInstanceSelector);
-  const instanceSelector = useStore($selectedInstanceSelector);
-  const propValues = propValuesByInstanceSelector.get(
-    JSON.stringify(instanceSelector)
-  );
+  const propValues = useStore($propValues);
 
   const logic = usePropsLogic({
     instance,
@@ -203,12 +292,6 @@ export const PropsSectionContainer = ({
         props.set(update.id, update);
       });
     },
-
-    deleteProp: (propId) => {
-      serverSyncStore.createTransaction([$props], (props) => {
-        props.delete(propId);
-      });
-    },
   });
 
   const hasMetaProps = Object.keys(logic.meta.props).length !== 0;
@@ -227,6 +310,7 @@ export const PropsSectionContainer = ({
         propValues={propValues ?? new Map()}
         component={instance.component}
         instanceId={instance.id}
+        selectedInstanceKey={selectedInstanceKey}
       />
     </fieldset>
   );

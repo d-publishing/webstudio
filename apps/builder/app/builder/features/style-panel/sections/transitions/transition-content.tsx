@@ -2,11 +2,6 @@ import { useState } from "react";
 import {
   toValue,
   type InvalidValue,
-  type LayersValue,
-  type TupleValue,
-  type KeywordValue,
-  type UnitValue,
-  type StyleProperty,
   type StyleValue,
   type TupleValueItem,
 } from "@webstudio-is/css-engine";
@@ -21,65 +16,50 @@ import {
   Text,
   Grid,
 } from "@webstudio-is/design-system";
-import {
-  parseCssValue,
-  properties,
-  type ExtractedTransitionProperties,
-} from "@webstudio-is/css-data";
-import type {
-  CreateBatchUpdate,
-  StyleUpdateOptions,
-} from "../../shared/use-style-data";
-import { type IntermediateStyleValue } from "../../shared/css-value-input";
-import { TransitionProperty } from "./transition-property";
-import { TransitionTiming } from "./transition-timing";
-import { CssValueInputContainer } from "../../shared/css-value-input";
-import { deleteTransitionLayer, editTransitionLayer } from "./transition-utils";
-import type { StyleInfo } from "../../shared/style-info";
-import { parseCssFragment } from "../../shared/parse-css-fragment";
 import { InfoCircleIcon } from "@webstudio-is/icons";
-
-type TransitionContentProps = {
-  index: number;
-  currentStyle: StyleInfo;
-  createBatchUpdate: CreateBatchUpdate;
-};
-
-// We are allowing users to add/edit layers as shorthand from the style-panel
-// So, we need to use the shorthand property to validate the layer too.
-// We removed transition from properties list to drop support from advanced tab and so the typecasting.
-const shortHandTransitionProperty = "transition" as StyleProperty;
+import { propertiesData, propertyDescriptions } from "@webstudio-is/css-data";
+import { type IntermediateStyleValue } from "../../shared/css-value-input";
+import { CssValueInputContainer } from "../../shared/css-value-input";
+import { parseCssFragment } from "../../shared/css-fragment";
+import { PropertyInlineLabel } from "../../property-label";
+import { TransitionProperty } from "./transition-property";
+import {
+  $availableVariables,
+  $availableUnitVariables,
+  useComputedStyles,
+} from "../../shared/model";
+import {
+  editRepeatedStyleItem,
+  setRepeatedStyleItem,
+} from "../../shared/repeated-style";
 
 const getLayer = (value: undefined | StyleValue, index: number) =>
   value?.type === "layers" ? value.value[index] : undefined;
 
-export const TransitionContent = ({
-  index,
-  createBatchUpdate,
-  currentStyle,
-}: TransitionContentProps) => {
-  const onEditLayer = (
-    index: number,
-    layers: LayersValue,
-    options: StyleUpdateOptions
-  ) => {
-    editTransitionLayer({
-      index,
-      layers,
-      options,
-      createBatchUpdate,
-      currentStyle,
-    });
-  };
+export const TransitionContent = ({ index }: { index: number }) => {
+  const styles = useComputedStyles([
+    "transition-property",
+    "transition-duration",
+    "transition-timing-function",
+    "transition-delay",
+    "transition-behavior",
+  ]);
+  const [
+    transitionProperty,
+    transitionDuration,
+    transitionTimingFunction,
+    transitionDelay,
+    transitionBehavior,
+  ] = styles;
 
-  const property = getLayer(currentStyle.transitionProperty?.value, index);
-  const duration = getLayer(currentStyle.transitionDuration?.value, index);
+  const property = getLayer(transitionProperty.cascadedValue, index);
+  const duration = getLayer(transitionDuration.cascadedValue, index);
   const timingFunction = getLayer(
-    currentStyle.transitionTimingFunction?.value,
+    transitionTimingFunction.cascadedValue,
     index
   );
-  const delay = getLayer(currentStyle.transitionDelay?.value, index);
-  const behavior = getLayer(currentStyle.transitionBehavior?.value, index);
+  const delay = getLayer(transitionDelay.cascadedValue, index);
+  const behavior = getLayer(transitionBehavior.cascadedValue, index);
 
   const [intermediateValue, setIntermediateValue] = useState<
     IntermediateStyleValue | InvalidValue | undefined
@@ -100,66 +80,36 @@ export const TransitionContent = ({
     });
   };
 
-  const handleComplete = (options: StyleUpdateOptions) => {
+  const handleComplete = () => {
     if (intermediateValue === undefined) {
       return;
     }
-
-    const parsed = parseCssFragment(intermediateValue.value, "transition");
-    const tuple: TupleValue = {
-      type: "tuple",
-      value: [
-        getLayer(parsed.get("transitionProperty"), 0),
-        getLayer(parsed.get("transitionDuration"), 0),
-        getLayer(parsed.get("transitionTimingFunction"), 0),
-        getLayer(parsed.get("transitionDelay"), 0),
-        // @todo getLayer(parsed.get("transitionBehavior"), 0),
-      ].filter(Boolean) as TupleValueItem[],
-    };
-    if (tuple.value.length === 0) {
-      setIntermediateValue({
-        type: "invalid",
-        value: intermediateValue.value,
-      });
-    }
-    const layers: LayersValue = {
-      type: "layers",
-      value: [tuple],
-    };
-
-    onEditLayer(index, layers, options);
+    editRepeatedStyleItem(
+      styles,
+      index,
+      parseCssFragment(intermediateValue.value, ["transition"])
+    );
   };
 
-  const handlePropertyUpdate = (
-    params: ExtractedTransitionProperties,
-    options: StyleUpdateOptions = { isEphemeral: false }
-  ) => {
-    const value: Array<UnitValue | KeywordValue> = Object.values({
-      ...{ property, duration, delay, timingFunction },
-      ...params,
-    }).filter<UnitValue | KeywordValue>(
-      (item): item is UnitValue | KeywordValue => item != null
-    );
-    const layerTuple: TupleValue = { type: "tuple", value };
-    const layerValue = parseCssValue(
-      shortHandTransitionProperty,
-      toValue(layerTuple)
-    );
-
-    if (layerValue.type === "invalid") {
-      setIntermediateValue({
-        type: "invalid",
-        value: toValue(layerTuple),
-      });
-      return;
-    }
-
+  const updateIntermediateValue = (params: {
+    property?: StyleValue;
+    timing?: StyleValue;
+    delay?: StyleValue;
+    duration?: StyleValue;
+  }) => {
+    const shorthand = toValue({
+      type: "tuple",
+      value: [
+        params.property ?? property,
+        params.duration ?? duration,
+        params.delay ?? delay,
+        params.timing ?? timingFunction,
+      ].filter((item): item is TupleValueItem => item !== undefined),
+    });
     setIntermediateValue({
       type: "intermediate",
-      value: toValue(layerTuple),
+      value: shorthand,
     });
-
-    onEditLayer(index, { type: "layers", value: [layerTuple] }, options);
   };
 
   return (
@@ -167,106 +117,122 @@ export const TransitionContent = ({
       <Grid
         gap="2"
         css={{
-          px: theme.spacing[9],
-          py: theme.spacing[5],
+          padding: theme.panel.padding,
           gridTemplateColumns: `1fr ${theme.spacing[23]}`,
           gridTemplateRows: theme.spacing[13],
         }}
       >
+        <PropertyInlineLabel
+          label="Property"
+          description={propertyDescriptions.transitionProperty}
+          properties={["transition-property"]}
+        />
         <TransitionProperty
-          property={property ?? properties.transitionProperty.initial}
-          onPropertySelection={handlePropertyUpdate}
-        />
-
-        <Flex align="center">
-          <Tooltip
-            variant="wrapped"
-            content={
-              <Flex gap="2" direction="column">
-                <Text variant="regularBold">Duration</Text>
-                <Text variant="monoBold" color="moreSubtle">
-                  transition-duration
-                </Text>
-                <Text>
-                  Sets the length of time a transition animation should take to
-                  complete.
-                </Text>
-              </Flex>
-            }
-          >
-            <Label css={{ display: "inline" }}>Duration</Label>
-          </Tooltip>
-        </Flex>
-        <CssValueInputContainer
-          key={"transitionDuration"}
-          property={"transitionDuration"}
-          styleSource="local"
-          value={duration ?? properties.transitionDuration.initial}
-          keywords={[]}
-          deleteProperty={() => {}}
-          setValue={(value, options) => {
-            if (
-              value === undefined ||
-              value.type !== "layers" ||
-              value.value[0].type !== "unit"
-            ) {
-              return;
-            }
-
-            handlePropertyUpdate({ duration: value.value[0] }, options);
+          value={property ?? propertiesData["transition-property"].initial}
+          onChange={(value) => {
+            updateIntermediateValue({ property: value });
+            setRepeatedStyleItem(transitionProperty, index, value);
           }}
         />
 
-        <Flex align="center">
-          <Tooltip
-            variant="wrapped"
-            content={
-              <Flex gap="2" direction="column">
-                <Text variant="regularBold">Delay</Text>
-                <Text variant="monoBold" color="moreSubtle">
-                  transition-delay
-                </Text>
-                <Text>
-                  Specify the duration to wait before the transition begins.
-                </Text>
-              </Flex>
-            }
-          >
-            <Label css={{ display: "inline" }}>Delay</Label>
-          </Tooltip>
-        </Flex>
+        <PropertyInlineLabel
+          label="Duration"
+          description={propertyDescriptions.transitionDuration}
+          properties={["transition-duration"]}
+        />
         <CssValueInputContainer
-          property={"transitionDelay"}
-          key={"transitionDelay"}
+          property="transition-duration"
           styleSource="local"
-          value={delay ?? properties.transitionDelay.initial}
-          keywords={[]}
-          deleteProperty={() => {}}
-          setValue={(value, options) => {
-            if (
-              value === undefined ||
-              value.type !== "layers" ||
-              value.value[0].type !== "unit"
-            ) {
+          getOptions={() => $availableUnitVariables.get()}
+          value={duration ?? propertiesData["transition-duration"].initial}
+          onDelete={() => {}}
+          onUpdate={(value, options) => {
+            if (value === undefined) {
               return;
             }
-
-            handlePropertyUpdate({ delay: value.value[0] }, options);
+            if (value.type === "layers") {
+              [value] = value.value;
+            }
+            if (value.type === "unit" || value.type === "var") {
+              updateIntermediateValue({ duration: value });
+              setRepeatedStyleItem(transitionDuration, index, value, options);
+            }
           }}
         />
 
-        <TransitionTiming
-          timing={timingFunction ?? properties.transitionTimingFunction.initial}
-          onTimingSelection={handlePropertyUpdate}
+        <PropertyInlineLabel
+          label="Delay"
+          description={propertyDescriptions.transitionDelay}
+          properties={["transition-delay"]}
+        />
+        <CssValueInputContainer
+          property="transition-delay"
+          styleSource="local"
+          getOptions={() => $availableUnitVariables.get()}
+          value={delay ?? propertiesData["transition-delay"].initial}
+          onDelete={() => {}}
+          onUpdate={(value, options) => {
+            if (value === undefined) {
+              return;
+            }
+            if (value.type === "layers") {
+              [value] = value.value;
+            }
+            if (value.type === "unit" || value.type === "var") {
+              updateIntermediateValue({ delay: value });
+              setRepeatedStyleItem(transitionDelay, index, value, options);
+            }
+          }}
+        />
+
+        <PropertyInlineLabel
+          label="Easing"
+          description={propertyDescriptions.transitionTimingFunction}
+          properties={["transition-timing-function"]}
+        />
+        <CssValueInputContainer
+          property="transition-timing-function"
+          styleSource="local"
+          getOptions={() => [
+            { type: "keyword", value: "linear" },
+            { type: "keyword", value: "ease" },
+            { type: "keyword", value: "ease-in" },
+            { type: "keyword", value: "ease-out" },
+            { type: "keyword", value: "ease-in-out" },
+            { type: "keyword", value: "step-start" },
+            { type: "keyword", value: "step-end" },
+            ...$availableVariables.get(),
+          ]}
+          value={
+            timingFunction ??
+            propertiesData["transition-timing-function"].initial
+          }
+          onDelete={() => {}}
+          onUpdate={(value, options) => {
+            if (value === undefined) {
+              return;
+            }
+            if (value.type === "layers") {
+              [value] = value.value;
+            }
+            if (value.type === "keyword" || value.type === "var") {
+              updateIntermediateValue({ timing: value });
+              setRepeatedStyleItem(
+                transitionTimingFunction,
+                index,
+                value,
+                options
+              );
+            }
+          }}
         />
       </Grid>
+
       <Separator css={{ gridColumn: "span 2" }} />
       <Flex
         direction="column"
         css={{
-          px: theme.spacing[9],
-          paddingTop: theme.spacing[5],
-          paddingBottom: theme.spacing[9],
+          padding: theme.panel.padding,
           gap: theme.spacing[3],
           minWidth: theme.spacing[30],
         }}
@@ -297,27 +263,12 @@ export const TransitionContent = ({
           color={intermediateValue?.type === "invalid" ? "error" : undefined}
           value={intermediateValue?.value ?? ""}
           onChange={handleChange}
-          onBlur={() => handleComplete({ isEphemeral: true })}
+          onBlur={handleComplete}
           onKeyDown={(event) => {
             event.stopPropagation();
 
             if (event.key === "Enter") {
-              handleComplete({ isEphemeral: false });
-              event.preventDefault();
-            }
-
-            if (event.key === "Escape") {
-              if (intermediateValue === undefined) {
-                return;
-              }
-
-              deleteTransitionLayer({
-                currentStyle,
-                createBatchUpdate,
-                index,
-                options: { isEphemeral: true },
-              });
-              setIntermediateValue(undefined);
+              handleComplete();
               event.preventDefault();
             }
           }}

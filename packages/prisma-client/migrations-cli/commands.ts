@@ -144,11 +144,6 @@ export const createSchema = async ({ name }: { name: string }) => {
 
   const sqlScript = await prismaMigrations.cliDiff();
 
-  if (isNoopSql(sqlScript ?? "")) {
-    logger.info("No changes to apply");
-    process.exit(0);
-  }
-
   const migrationName = prismaMigrations.generateMigrationName(name);
 
   const filePath = prismaMigrations.getMigrationFilePath(migrationName, "sql");
@@ -350,17 +345,4 @@ export const resolve = async ({
   await prismaMigrations.setRolledBack(migrationName);
   logger.info(`Resolved ${migrationName} as rolled back`);
   logger.info("");
-};
-
-export const reset = async () => {
-  // Just to make it read the migrations folder
-  // and fail early if something is wrong with it.
-  await getStatus();
-
-  logger.info("You're about to DELETE ALL INFORMATION from the database,");
-  logger.info("and run all migrations from scratch!");
-  logger.info("");
-
-  await prismaMigrations.resetDatabase();
-  await up();
 };

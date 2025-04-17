@@ -1,30 +1,26 @@
 import { useStore } from "@nanostores/react";
-import { Grid, Switch, theme, useId } from "@webstudio-is/design-system";
+import { Grid, Switch, theme } from "@webstudio-is/design-system";
 import {
   BindingControl,
   BindingPopover,
 } from "~/builder/shared/binding-popover";
 import {
   type ControlProps,
-  Label,
-  RemovePropButton,
   $selectedInstanceScope,
   updateExpressionValue,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
-import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../property-label";
 
 export const BooleanControl = ({
   meta,
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: ControlProps<"boolean">) => {
-  const id = useId();
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -35,25 +31,16 @@ export const BooleanControl = ({
   return (
     <Grid
       css={{
-        gridTemplateColumns: deletable
-          ? `1fr max-content max-content`
-          : `1fr max-content`,
+        gridTemplateColumns: `1fr max-content`,
         minHeight: theme.spacing[13],
         justifyItems: "start",
       }}
       align="center"
       gap="2"
     >
-      <Label
-        htmlFor={id}
-        description={meta.description}
-        readOnly={overwritable === false}
-      >
-        {label}
-      </Label>
+      <PropertyLabel name={propName} readOnly={overwritable === false} />
       <BindingControl>
         <Switch
-          id={id}
           disabled={overwritable === false}
           checked={Boolean(computedValue ?? false)}
           onCheckedChange={(value) => {
@@ -82,7 +69,6 @@ export const BooleanControl = ({
           }
         />
       </BindingControl>
-      {deletable && <RemovePropButton onClick={onDelete} />}
     </Grid>
   );
 };

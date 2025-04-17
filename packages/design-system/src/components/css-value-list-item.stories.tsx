@@ -7,17 +7,9 @@ import {
 } from "./css-value-list-item";
 import { Label, labelColors } from "./label";
 import { SmallToggleButton } from "./small-toggle-button";
-import {
-  EyeconOpenIcon,
-  EyeconClosedIcon,
-  SubtractIcon,
-} from "@webstudio-is/icons";
+import { EyeOpenIcon, EyeClosedIcon, MinusIcon } from "@webstudio-is/icons";
 import { SmallIconButton } from "./small-icon-button";
-import {
-  FloatingPanelPopover,
-  FloatingPanelPopoverContent,
-  FloatingPanelPopoverTrigger,
-} from "./floating-panel-popover";
+import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { StorySection, StoryGrid } from "./storybook";
 
 export default {
@@ -64,7 +56,7 @@ const ListItem = (props: {
       }
       thumbnail={<Thumbnail />}
       hidden={props.hidden}
-      draggable={true}
+      draggable
       state={props.state}
       focused={props.focused}
       active={props.active}
@@ -77,13 +69,13 @@ const ListItem = (props: {
             onPressedChange={onPressedChange}
             variant="normal"
             tabIndex={-1}
-            icon={pressed ? <EyeconClosedIcon /> : <EyeconOpenIcon />}
+            icon={pressed ? <EyeClosedIcon /> : <EyeOpenIcon />}
           />
 
           <SmallIconButton
             variant="destructive"
             tabIndex={-1}
-            icon={<SubtractIcon />}
+            icon={<MinusIcon />}
           />
         </>
       }
@@ -102,8 +94,8 @@ export const Declarative = (props: {
   return (
     <Panel>
       <StorySection title="Configurable">
-        <FloatingPanelPopover>
-          <FloatingPanelPopoverTrigger asChild>
+        <Popover>
+          <PopoverTrigger asChild>
             <CssValueListItem
               id="0"
               index={0}
@@ -122,22 +114,22 @@ export const Declarative = (props: {
                     onPressedChange={onPressedChange}
                     variant="normal"
                     tabIndex={-1}
-                    icon={pressed ? <EyeconClosedIcon /> : <EyeconOpenIcon />}
+                    icon={pressed ? <EyeClosedIcon /> : <EyeOpenIcon />}
                   />
 
                   <SmallIconButton
                     variant="destructive"
                     tabIndex={-1}
-                    icon={<SubtractIcon />}
+                    icon={<MinusIcon />}
                   />
                 </>
               }
             />
-          </FloatingPanelPopoverTrigger>
-          <FloatingPanelPopoverContent>
+          </PopoverTrigger>
+          <PopoverContent>
             <div className={css({ p: theme.spacing[10] })()}>Content</div>
-          </FloatingPanelPopoverContent>
-        </FloatingPanelPopover>
+          </PopoverContent>
+        </Popover>
       </StorySection>
 
       <StorySection title="Overflows">

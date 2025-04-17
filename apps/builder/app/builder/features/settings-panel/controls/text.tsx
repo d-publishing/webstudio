@@ -1,5 +1,6 @@
+import { useId } from "react";
 import { useStore } from "@nanostores/react";
-import { useId, TextArea } from "@webstudio-is/design-system";
+import { TextArea } from "@webstudio-is/design-system";
 import {
   BindingControl,
   BindingPopover,
@@ -8,23 +9,19 @@ import {
   type ControlProps,
   useLocalValue,
   ResponsiveLayout,
-  Label,
   updateExpressionValue,
   $selectedInstanceScope,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
-import { useEffect, useRef } from "react";
-import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../property-label";
 
 export const TextControl = ({
   meta,
   prop,
   propName,
-  deletable,
   computedValue,
-  autoFocus,
   onChange,
-  onDelete,
 }: ControlProps<"text">) => {
   const localValue = useLocalValue(String(computedValue ?? ""), (value) => {
     if (prop?.type === "expression") {
@@ -34,8 +31,7 @@ export const TextControl = ({
     }
   });
   const id = useId();
-  const label = humanizeString(meta.label || propName);
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -43,16 +39,9 @@ export const TextControl = ({
     prop?.type === "expression" ? prop.value : undefined
   );
 
-  useEffect(() => {
-    if (autoFocus) {
-      textAreaRef.current?.focus();
-    }
-  }, [autoFocus]);
-
   const input = (
     <BindingControl>
       <TextArea
-        ref={textAreaRef}
         id={id}
         disabled={overwritable === false}
         autoGrow
@@ -64,6 +53,7 @@ export const TextControl = ({
         onBlur={localValue.save}
         onSubmit={localValue.save}
       />
+
       <BindingPopover
         scope={scope}
         aliases={aliases}
@@ -84,21 +74,11 @@ export const TextControl = ({
     </BindingControl>
   );
 
-  const labelElement = (
-    <Label
-      htmlFor={id}
-      description={meta.description}
-      readOnly={overwritable === false}
-    >
-      {label}
-    </Label>
-  );
-
   return (
     <ResponsiveLayout
-      label={labelElement}
-      deletable={deletable}
-      onDelete={onDelete}
+      label={
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
+      }
     >
       {input}
     </ResponsiveLayout>

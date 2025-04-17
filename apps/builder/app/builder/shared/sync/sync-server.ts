@@ -1,12 +1,16 @@
 import { useEffect } from "react";
 import { atom } from "nanostores";
-import { Project } from "@webstudio-is/project";
+import type { Change } from "immerhin";
+import type { Project } from "@webstudio-is/project";
 import type { Build } from "@webstudio-is/project-build";
 import type { AuthPermit } from "@webstudio-is/trpc-interface/index.server";
 import * as commandQueue from "./command-queue";
 import { restPatchPath } from "~/shared/router-utils";
 import { toast } from "@webstudio-is/design-system";
-import { serverSyncStore } from "~/shared/sync";
+import { fetch } from "~/shared/fetch.client";
+import type { SyncStorage, Transaction } from "~/shared/sync-client";
+import { $project } from "~/shared/nano-states";
+import { loadBuilderData } from "~/shared/builder-data";
 
 // Periodic check for new entries to group them into one job/call in sync queue.
 const NEW_ENTRIES_INTERVAL = 1000;
@@ -35,7 +39,7 @@ export type QueueStatus =
   | { status: "failed" }
   | { status: "fatal"; error: string };
 
-export const queueStatus = atom<QueueStatus>({ status: "idle" });
+export const $queueStatus = atom<QueueStatus>({ status: "idle" });
 
 const getRandomBetween = (a: number, b: number) => {
   return Math.random() * (b - a) + a;
@@ -46,13 +50,13 @@ const pollCommands = async function* () {
   while (true) {
     const commands = commandQueue.dequeueAll();
     if (commands.length > 0) {
-      queueStatus.set({ status: "running" });
+      $queueStatus.set({ status: "running" });
       yield* commands;
       await pause(NEW_ENTRIES_INTERVAL);
       // Do not switch on idle state until there is possibility that queue is not empty
       continue;
     }
-    queueStatus.set({ status: "idle" });
+    $queueStatus.set({ status: "idle" });
     await pause(NEW_ENTRIES_INTERVAL);
   }
 };
@@ -65,15 +69,19 @@ const retry = async function* () {
     yield;
     failedAttempts += 1;
     if (failedAttempts < MAX_RETRY_RECOVERY) {
-      queueStatus.set({ status: "recovering" });
+      $queueStatus.set({ status: "recovering" });
       await pause(INTERVAL_RECOVERY);
     } else {
-      queueStatus.set({ status: "failed" });
+      $queueStatus.set({ status: "failed" });
 
       // Clamped exponential backoff with decorrelated jitter
       // to prevent clients from sending simultaneous requests after server issues
       delay = getRandomBetween(INTERVAL_ERROR, delay * 3);
       delay = Math.min(delay, MAX_INTERVAL_ERROR);
+
+      toast.error(
+        `Builder is offline. Retry in ${Math.round(delay / 1000)} seconds.`
+      );
 
       await pause(delay);
     }
@@ -112,7 +120,7 @@ const syncServer = async function () {
         }
 
         // stop synchronization and wait til user reload
-        queueStatus.set({ status: "fatal", error });
+        $queueStatus.set({ status: "fatal", error });
 
         if (shouldReload === false) {
           toast.error(
@@ -144,7 +152,7 @@ const syncServer = async function () {
         duration: Number.POSITIVE_INFINITY,
       });
 
-      queueStatus.set({ status: "fatal", error });
+      $queueStatus.set({ status: "fatal", error });
 
       return;
     }
@@ -156,19 +164,21 @@ const syncServer = async function () {
     for await (const _ of retry()) {
       // in case of any error continue retrying
       try {
-        const response = await fetch(
-          restPatchPath({ authToken: details.authToken }),
-          {
-            method: "post",
-            body: JSON.stringify({
-              transactions,
-              buildId: details.buildId,
-              projectId,
-              // provide latest stored version to server
-              version: details.version,
-            }),
-          }
-        );
+        const headers = new Headers();
+        if (details.authToken) {
+          headers.append("x-auth-token", details.authToken);
+        }
+        const response = await fetch(restPatchPath(), {
+          method: "post",
+          body: JSON.stringify({
+            transactions,
+            buildId: details.buildId,
+            projectId,
+            // provide latest stored version to server
+            version: details.version,
+            headers,
+          }),
+        });
 
         if (response.ok) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -180,18 +190,19 @@ const syncServer = async function () {
           }
           // when versions mismatched ask user to reload
           // user may cancel to copy own state before reloading
-          if (result.status === "version_mismatched") {
+          if (
+            result.status === "version_mismatched" ||
+            result.status === "authorization_error"
+          ) {
             const error =
-              "You are currently in single-player mode. " +
-              "The project has been edited in a different tab, browser, or by another user. " +
-              "Please reload the page to get the latest version.";
+              result.errors ?? "Unknown version mismatch. Please reload.";
 
             const shouldReload = confirm(error);
             if (shouldReload) {
               location.reload();
             }
 
-            queueStatus.set({ status: "fatal", error });
+            $queueStatus.set({ status: "fatal", error });
 
             if (shouldReload === false) {
               toast.error(
@@ -210,7 +221,7 @@ const syncServer = async function () {
             } Synchronization has been paused.`;
             // Api error we don't know how to handle, as retries will not help probably
             // We should show error and break synchronization
-            queueStatus.set({ status: "fatal", error });
+            $queueStatus.set({ status: "fatal", error });
 
             toast.error(error, {
               id: "fatal-error",
@@ -229,12 +240,14 @@ const syncServer = async function () {
 
           console.info(`Non ok respone: ${text}`);
         }
-      } catch (e) {
+      } catch (error) {
         if (navigator.onLine) {
           // ERR_CONNECTION_REFUSED or like, probably restorable with retries
           // anyway lets's log it
 
-          console.info(e instanceof Error ? e.message : JSON.stringify(e));
+          console.info(
+            error instanceof Error ? error.message : JSON.stringify(error)
+          );
         }
       }
     }
@@ -266,7 +279,7 @@ export const startProjectSync = ({
   });
 };
 
-const useSyncProject = async ({
+const useSyncProject = ({
   projectId,
   authPermit,
 }: {
@@ -278,26 +291,38 @@ const useSyncProject = async ({
       return;
     }
     syncServer();
-
-    const updateProjectTransactions = () => {
-      const transactions = serverSyncStore.popAll();
-      if (transactions.length === 0) {
-        return;
-      }
-      commandQueue.enqueue({ type: "transactions", transactions, projectId });
-    };
-
-    const intervalHandle = setInterval(
-      updateProjectTransactions,
-      NEW_ENTRIES_INTERVAL
-    );
-
-    return () => {
-      updateProjectTransactions();
-      clearInterval(intervalHandle);
-    };
   }, [projectId, authPermit]);
 };
+
+export class ServerSyncStorage implements SyncStorage {
+  name = "server";
+  sendTransaction(transaction: Transaction<Change[]>) {
+    if (transaction.object === "server") {
+      const projectId = $project.get()?.id ?? "";
+      commandQueue.enqueue({
+        type: "transactions",
+        transactions: [transaction],
+        projectId,
+      });
+    }
+  }
+  subscribe(setState: (state: unknown) => void, signal: AbortSignal) {
+    const projectId = $project.get()?.id ?? "";
+    loadBuilderData({ projectId, signal })
+      .then((data) => {
+        const serverData = new Map(Object.entries(data));
+        setState(new Map([["server", serverData]]));
+      })
+      .catch((err) => {
+        if (err instanceof Error) {
+          console.error(err);
+          return;
+        }
+
+        // Abort error do nothing
+      });
+  }
+}
 
 type SyncServerProps = {
   projectId: Project["id"];
@@ -312,7 +337,7 @@ export const useSyncServer = ({ projectId, authPermit }: SyncServerProps) => {
 
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
-      const { status } = queueStatus.get();
+      const { status } = $queueStatus.get();
       if (status === "idle" || status === "fatal") {
         return;
       }

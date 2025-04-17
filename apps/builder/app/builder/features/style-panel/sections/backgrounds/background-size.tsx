@@ -1,18 +1,21 @@
 import { Grid, Select, theme } from "@webstudio-is/design-system";
 import { toValue } from "@webstudio-is/css-engine";
-import { styleConfigByName } from "../../shared/configs";
-import { parseCssValue } from "@webstudio-is/css-data";
-import { CssValueInputContainer } from "../../shared/css-value-input";
+import { keywordValues, propertyDescriptions } from "@webstudio-is/css-data";
 import {
   type StyleValue,
   TupleValue,
   TupleValueItem,
 } from "@webstudio-is/css-engine";
+import { CssValueInputContainer } from "../../shared/css-value-input";
 import type { SetValue } from "../../shared/use-style-data";
-import { NonResetablePropertyName } from "../../shared/property-name";
-import type { ControlProps } from "../../controls";
+import { PropertyInlineLabel } from "../../property-label";
+import { useComputedStyleDecl } from "../../shared/model";
+import {
+  getRepeatedStyleItem,
+  setRepeatedStyleItem,
+} from "../../shared/repeated-style";
 
-const StyleKeywordAuto = { type: "keyword" as const, value: "auto" };
+const autoKeyword = { type: "keyword" as const, value: "auto" };
 
 const toTuple = (
   valueX?: StyleValue | string,
@@ -23,7 +26,7 @@ const toTuple = (
     return parsedValue.data;
   }
 
-  const parsedValueX = valueX ? TupleValueItem.parse(valueX) : StyleKeywordAuto;
+  const parsedValueX = valueX ? TupleValueItem.parse(valueX) : autoKeyword;
   const parsedValueY = valueY ? TupleValueItem.parse(valueY) : parsedValueX;
 
   return {
@@ -32,36 +35,32 @@ const toTuple = (
   };
 };
 
-export const BackgroundSize = (
-  props: Omit<ControlProps, "property" | "items">
-) => {
-  const property = "backgroundSize";
+export const BackgroundSize = ({ index }: { index: number }) => {
+  const property = "background-size";
+  const styleDecl = useComputedStyleDecl(property);
+  const styleValue = getRepeatedStyleItem(styleDecl, index);
 
-  const styleInfo = props.currentStyle[property];
-  const styleValue = styleInfo?.value;
-  const styleSource = "default";
-  const { items: defaultItems } = styleConfigByName(property);
-
-  const selectOptions = [
-    ...defaultItems,
-    { name: "custom", label: "Custom" },
-  ].map(({ name }) => name);
+  const selectOptions = [...keywordValues[property], "custom"];
   const selectValue =
     styleValue?.type === "keyword" ? toValue(styleValue) : "custom";
 
   const customSizeDisabled = styleValue?.type === "keyword";
-  const customSizeOptions = [StyleKeywordAuto];
+  const customSizeOptions = [autoKeyword];
   const customSizeValue = toTuple(styleValue);
 
-  const setValue = props.setProperty(property);
+  const setValue: SetValue = (value, options) => {
+    setRepeatedStyleItem(styleDecl, index, value, options);
+  };
 
-  const setValueX: SetValue = (valueX, options) => {
-    const nextValue = toTuple(valueX, customSizeValue.value[1]);
+  const setValueX: SetValue = (value, options) => {
+    const [x] = value.type === "layers" ? value.value : [value];
+    const nextValue = toTuple(x, customSizeValue.value[1]);
     setValue(nextValue, options);
   };
 
-  const setValueY: SetValue = (valueY, options) => {
-    const nextValue = toTuple(customSizeValue.value[0], valueY);
+  const setValueY: SetValue = (value, options) => {
+    const [y] = value.type === "layers" ? value.value : [value];
+    const nextValue = toTuple(customSizeValue.value[0], y);
     setValue(nextValue, options);
   };
 
@@ -72,10 +71,10 @@ export const BackgroundSize = (
         align="center"
         gap={2}
       >
-        <NonResetablePropertyName
-          style={props.currentStyle}
-          properties={[property]}
+        <PropertyInlineLabel
           label="Size"
+          description={propertyDescriptions.backgroundSize}
+          properties={[property]}
         />
 
         <Select
@@ -86,13 +85,10 @@ export const BackgroundSize = (
           value={selectValue}
           onChange={(name: string) => {
             if (name === "custom") {
-              return setValue({
-                type: "tuple",
-                value: [StyleKeywordAuto, StyleKeywordAuto],
-              });
+              setValue({ type: "tuple", value: [autoKeyword, autoKeyword] });
+            } else {
+              setValue({ type: "keyword", value: name });
             }
-            const cssValue = parseCssValue(property, name);
-            setValue(cssValue);
           }}
           onItemHighlight={(name) => {
             // No need to preview custom size as it needs additional user input.
@@ -107,8 +103,7 @@ export const BackgroundSize = (
               return;
             }
             // Preview on mouse enter or focus.
-            const cssValue = parseCssValue(property, name);
-            setValue(cssValue, { isEphemeral: true });
+            setValue({ type: "keyword", value: name }, { isEphemeral: true });
           }}
           onOpenChange={(isOpen) => {
             // Remove ephemeral changes when closing the menu.
@@ -127,17 +122,15 @@ export const BackgroundSize = (
         gapX={2}
         gapY={1}
       >
-        <NonResetablePropertyName
-          style={props.currentStyle}
-          properties={[property]}
+        <PropertyInlineLabel
+          properties={["background-size"]}
           label="Width"
           description="The width of the background image."
           disabled={customSizeDisabled}
         />
 
-        <NonResetablePropertyName
-          style={props.currentStyle}
-          properties={[property]}
+        <PropertyInlineLabel
+          properties={["background-size"]}
           label="Height"
           description="The height of the background image."
           disabled={customSizeDisabled}
@@ -146,21 +139,21 @@ export const BackgroundSize = (
         <CssValueInputContainer
           disabled={customSizeDisabled}
           property={property}
-          styleSource={styleSource}
-          keywords={customSizeOptions}
+          styleSource="default"
+          getOptions={() => customSizeOptions}
           value={customSizeValue.value[0]}
-          setValue={setValueX}
-          deleteProperty={props.deleteProperty}
+          onUpdate={setValueX}
+          onDelete={() => {}}
         />
 
         <CssValueInputContainer
           disabled={customSizeDisabled}
           property={property}
-          styleSource={styleSource}
-          keywords={customSizeOptions}
+          styleSource="default"
+          getOptions={() => customSizeOptions}
           value={customSizeValue.value[1]}
-          setValue={setValueY}
-          deleteProperty={props.deleteProperty}
+          onUpdate={setValueY}
+          onDelete={() => {}}
         />
       </Grid>
     </>

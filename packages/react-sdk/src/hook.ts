@@ -1,5 +1,10 @@
-import type { Instance, Prop } from "@webstudio-is/sdk";
-import type { IndexesWithinAncestors } from "./instance-utils";
+import type { IndexesWithinAncestors, Instance, Prop } from "@webstudio-is/sdk";
+
+export type InstanceData = {
+  id: Instance["id"];
+  instanceKey: string;
+  component: Instance["component"];
+};
 
 /**
  * Hooks are subscriptions to builder events
@@ -9,27 +14,21 @@ import type { IndexesWithinAncestors } from "./instance-utils";
 
 export type HookContext = {
   indexesWithinAncestors: IndexesWithinAncestors;
-  getPropValue: (instanceId: Instance["id"], propName: Prop["name"]) => unknown;
-  setPropVariable: (
-    instanceId: Instance["id"],
-    propName: Prop["name"],
-    value: unknown
-  ) => void;
+  getPropValue: (instanceData: InstanceData, propName: Prop["name"]) => unknown;
   setMemoryProp: (
-    instanceId: readonly Instance["id"][],
+    instanceData: InstanceData,
     propName: Prop["name"],
     value: unknown
   ) => void;
 };
 
-export type InstancePath = Instance[];
+export type InstancePath = InstanceData[];
 
 type NavigatorEvent = {
   /**
    * List of instances from selected to the root
    */
   instancePath: InstancePath;
-  instanceSelector: readonly Instance["id"][];
 };
 
 export type Hook = {
@@ -43,8 +42,8 @@ export type Hook = {
  */
 export const getClosestInstance = (
   instancePath: InstancePath,
-  currentInstance: Instance,
-  closestComponent: Instance["component"]
+  currentInstance: InstanceData,
+  closestComponent: InstanceData["component"]
 ) => {
   let matched = false;
   for (const instance of instancePath) {
@@ -55,17 +54,4 @@ export const getClosestInstance = (
       return instance;
     }
   }
-};
-
-export const getInstanceSelectorById = (
-  instanceSelector: readonly Instance["id"][],
-  instanceId: Instance["id"]
-) => {
-  const index = instanceSelector.findIndex(
-    (selector) => selector === instanceId
-  );
-  if (index === -1) {
-    return [];
-  }
-  return instanceSelector.slice(index);
 };

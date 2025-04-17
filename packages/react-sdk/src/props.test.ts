@@ -1,6 +1,6 @@
-import { test, expect } from "@jest/globals";
+import { test, expect, describe } from "vitest";
 import type { Pages, Prop } from "@webstudio-is/sdk";
-import { normalizeProps } from "./props";
+import { isAttributeNameSafe, normalizeProps } from "./props";
 
 const pagesBase: Pages = {
   meta: {},
@@ -10,7 +10,6 @@ const pagesBase: Pages = {
     name: "Home",
     title: "Home",
     rootInstanceId: "instance-1",
-    systemDataSourceId: "",
     meta: {},
   },
   pages: [],
@@ -204,7 +203,6 @@ test("normalize page prop with path into string", () => {
             name: "Page",
             title: "Page",
             rootInstanceId: "instance-1",
-            systemDataSourceId: "",
             meta: {},
           },
         ],
@@ -257,7 +255,6 @@ test("normalize page prop with path and hash into string", () => {
           name: "Page",
           title: "Page",
           rootInstanceId: "instance-1",
-          systemDataSourceId: "",
           meta: {},
         },
       ],
@@ -288,4 +285,31 @@ test("normalize page prop with path and hash into string", () => {
     },
     idProp,
   ]);
+});
+
+describe("isAttributeNameSafe", () => {
+  test("should return true for valid attribute names", () => {
+    expect(isAttributeNameSafe("data-test")).toBe(true);
+    expect(isAttributeNameSafe("aria-label")).toBe(true);
+    expect(isAttributeNameSafe("class")).toBe(true);
+    expect(isAttributeNameSafe("ns:class")).toBe(true);
+  });
+
+  test("should return false for invalid attribute names", () => {
+    expect(isAttributeNameSafe("123class")).toBe(false);
+    expect(isAttributeNameSafe("class.name")).toBe(false);
+    expect(isAttributeNameSafe(":bad")).toBe(false);
+    expect(isAttributeNameSafe(" ")).toBe(false);
+    expect(isAttributeNameSafe("hello world")).toBe(false);
+  });
+
+  test("should return true for cached valid attribute names", () => {
+    isAttributeNameSafe("data-cached");
+    expect(isAttributeNameSafe("data-cached")).toBe(true);
+  });
+
+  test("should return false for cached invalid attribute names", () => {
+    isAttributeNameSafe("1-invalid-cached");
+    expect(isAttributeNameSafe("1-invalid-cached")).toBe(false);
+  });
 });

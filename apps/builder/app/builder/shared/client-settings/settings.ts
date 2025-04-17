@@ -1,12 +1,11 @@
-import { useEffect } from "react";
 import { atom } from "nanostores";
-import { useStore } from "@nanostores/react";
 import { z } from "zod";
 
 const Settings = z.object({
   navigatorLayout: z.enum(["docked", "undocked"]).default("undocked"),
   isAiMenuOpen: z.boolean().default(true),
   isAiCommandBarVisible: z.boolean().default(false),
+  stylePanelMode: z.enum(["default", "focus", "advanced"]).default("default"),
 });
 
 export type Settings = z.infer<typeof Settings>;
@@ -46,45 +45,26 @@ const write = (settings: Settings) => {
   localStorage.setItem(namespace, JSON.stringify(settings));
 };
 
-/**
- * Get a value from local storage or a default.
- */
-export const getSetting = <Name extends keyof Settings>(name: Name) => {
-  const settings = read();
-  const value = settings[name];
-  return value;
-};
+export const $settings = atom<Settings>(defaultSettings);
 
 export const setSetting = <Name extends keyof Settings>(
   name: Name,
   value: Settings[Name]
 ) => {
-  const settings = read();
-
-  write({ ...settings, [name]: value });
+  const settings = $settings.get();
+  if (settings[name] === value) {
+    return;
+  }
+  const nextSettings = { ...settings, [name]: value };
+  $settings.set(nextSettings);
+  write(nextSettings);
 };
 
-const $settings = atom<Settings>(defaultSettings);
-
-export const useClientSettings = (): [Settings, typeof setSetting, boolean] => {
-  const settings = useStore($settings);
-
-  useEffect(() => {
-    $settings.set(read());
-  }, []);
-
-  const setSettingValue = <Name extends keyof Settings>(
-    name: Name,
-    value: Settings[Name]
-  ) => {
-    if (settings[name] === value) {
-      return;
-    }
-    $settings.set({ ...settings, [name]: value });
-    setSetting(name, value);
-  };
-
-  const isLoaded = settings !== defaultSettings;
-
-  return [settings, setSettingValue, isLoaded];
+export const getSetting = <Name extends keyof Settings>(name: Name) => {
+  let settings = $settings.get();
+  if (settings === defaultSettings) {
+    settings = read();
+    $settings.set(settings);
+  }
+  return settings[name];
 };

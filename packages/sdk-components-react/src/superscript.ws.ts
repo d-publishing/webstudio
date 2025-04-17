@@ -4,8 +4,8 @@ import {
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-import { sup } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { sup } from "@webstudio-is/sdk/normalize.css";
 import type { defaultTag } from "./superscript";
 import { props } from "./__generated__/superscript.props";
 
@@ -14,7 +14,7 @@ const presetStyle = {
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  type: "rich-text-child",
+  type: "container",
   label: "Superscript Text",
   icon: SuperscriptIcon,
   states: defaultStates,

@@ -1,32 +1,24 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type JSX, type ReactNode } from "react";
 import { useStore } from "@nanostores/react";
 import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { usePublish, $publisher } from "~/shared/pubsub";
 import type { Build } from "@webstudio-is/project-build";
 import type { Project } from "@webstudio-is/project";
-import {
-  theme,
-  Box,
-  type CSS,
-  Flex,
-  Grid,
-  Progress,
-} from "@webstudio-is/design-system";
+import { theme, Box, type CSS, Flex, Grid } from "@webstudio-is/design-system";
 import type { AuthPermit } from "@webstudio-is/trpc-interface/index.server";
-import { createImageLoader } from "@webstudio-is/image";
-import { registerContainers, useBuilderStore } from "~/shared/sync";
-import { startProjectSync, useSyncServer } from "./shared/sync/sync-server";
+import { registerContainers, createObjectPool } from "~/shared/sync";
 import {
-  SidebarLeft,
-  NavigatorContent,
-  useNavigatorLayout,
-} from "./features/sidebar-left";
-import { Inspector } from "./features/inspector";
+  ServerSyncStorage,
+  startProjectSync,
+  useSyncServer,
+} from "./shared/sync/sync-server";
+import { SidebarLeft } from "./sidebar-left";
+import { Inspector } from "./inspector";
 import { Topbar } from "./features/topbar";
 import { Footer } from "./features/footer";
 import {
   CanvasIframe,
-  useReadCanvasRect,
+  CanvasToolsContainer,
   Workspace,
 } from "./features/workspace";
 import {
@@ -38,14 +30,13 @@ import {
   subscribeResources,
   $authTokenPermissions,
   $publisherHost,
-  $imageLoader,
-  $textEditingInstanceSelector,
-  $selectedInstanceRenderState,
-  $canvasIframeState,
+  $isDesignMode,
+  $isContentMode,
+  $userPlanFeatures,
+  subscribeModifierKeys,
 } from "~/shared/nano-states";
-import { type Settings } from "./shared/client-settings";
-import { getBuildUrl } from "~/shared/router-utils";
-import { useCopyPaste } from "~/shared/copy-paste";
+import { $settings, type Settings } from "./shared/client-settings";
+import { builderUrl, getCanvasUrl } from "~/shared/router-utils";
 import { BlockingAlerts } from "./features/blocking-alerts";
 import { useSyncPageUrl } from "~/shared/pages";
 import { useMount, useUnmount } from "~/shared/hook-utils/use-mount";
@@ -53,18 +44,31 @@ import { subscribeCommands } from "~/builder/shared/commands";
 import { AiCommandBar } from "./features/ai/ai-command-bar";
 import { ProjectSettings } from "./features/project-settings";
 import type { UserPlanFeatures } from "~/shared/db/user-plan-features.server";
-import { $isCloneDialogOpen, $userPlanFeatures } from "./shared/nano-states";
+import {
+  $activeSidebarPanel,
+  $dataLoadingState,
+  $isCloneDialogOpen,
+  $loadingState,
+  type SidebarPanelName,
+} from "./shared/nano-states";
 import { CloneProjectDialog } from "~/shared/clone-project";
 import type { TokenPermissions } from "@webstudio-is/authorization-token";
 import { useToastErrors } from "~/shared/error/toast-error";
-import { canvasApi } from "~/shared/canvas-api";
-import { loadBuilderData, setBuilderData } from "~/shared/builder-data";
-import { WebstudioIcon } from "@webstudio-is/icons";
-import { computed } from "nanostores";
-import { $dataLoadingState } from "~/shared/nano-states/builder";
 import { initBuilderApi } from "~/shared/builder-api";
 import { updateWebstudioData } from "~/shared/instance-utils";
 import { migrateWebstudioDataMutable } from "~/shared/webstudio-data-migrator";
+import { Loading, LoadingBackground } from "./shared/loading";
+import { mergeRefs } from "@react-aria/utils";
+import { CommandPanel } from "./features/command-panel";
+
+import {
+  initCopyPaste,
+  initCopyPasteForContentEditMode,
+} from "~/shared/copy-paste/init-copy-paste";
+import { useInertHandlers } from "./shared/inert-handlers";
+import { TextToolbar } from "./features/workspace/canvas-tools/text-toolbar";
+import { SyncClient } from "~/shared/sync-client";
+import { RemoteDialog } from "./features/help/remote-dialog";
 
 registerContainers();
 
@@ -101,12 +105,8 @@ const SidePanel = ({
         fg: 0,
         // Left sidebar tabs won't be able to pop out to the right if we set overflowX to auto.
         //overflowY: "auto",
-        bc: theme.colors.backgroundPanel,
+        backgroundColor: theme.colors.backgroundPanel,
         height: "100%",
-        "&:last-of-type": {
-          // Ensure content still has full width, avoid subpixels give layout round numbers
-          boxShadow: `inset 1px 0 0 0 ${theme.colors.borderMain}`,
-        },
         ...css,
       }}
     >
@@ -115,14 +115,15 @@ const SidePanel = ({
   );
 };
 
-const Main = ({ children }: { children: ReactNode }) => (
+const Main = ({ children, css }: { children: ReactNode; css?: CSS }) => (
   <Flex
     as="main"
     direction="column"
     css={{
       gridArea: "main",
-      overflow: "hidden",
       position: "relative",
+      isolation: "isolate",
+      ...css,
     }}
   >
     {children}
@@ -132,14 +133,17 @@ const Main = ({ children }: { children: ReactNode }) => (
 type ChromeWrapperProps = {
   children: Array<JSX.Element | null | false>;
   isPreviewMode: boolean;
+  navigatorLayout: Settings["navigatorLayout"];
 };
 
 const getChromeLayout = ({
   isPreviewMode,
   navigatorLayout,
+  activeSidebarPanel,
 }: {
   isPreviewMode: boolean;
   navigatorLayout: Settings["navigatorLayout"];
+  activeSidebarPanel?: SidebarPanelName;
 }) => {
   if (isPreviewMode) {
     return {
@@ -152,9 +156,9 @@ const getChromeLayout = ({
     };
   }
 
-  if (navigatorLayout === "undocked") {
+  if (navigatorLayout === "undocked" && activeSidebarPanel !== "none") {
     return {
-      gridTemplateColumns: `auto ${theme.spacing[30]} 1fr ${theme.spacing[30]}`,
+      gridTemplateColumns: `auto ${theme.sizes.sidebarWidth} 1fr ${theme.sizes.sidebarWidth}`,
       gridTemplateAreas: `
             "header header header header"
             "sidebar navigator main inspector"
@@ -164,7 +168,7 @@ const getChromeLayout = ({
   }
 
   return {
-    gridTemplateColumns: `auto 1fr ${theme.spacing[30]}`,
+    gridTemplateColumns: `auto 1fr ${theme.sizes.sidebarWidth}`,
     gridTemplateAreas: `
           "header header header"
           "sidebar main inspector"
@@ -173,18 +177,22 @@ const getChromeLayout = ({
   };
 };
 
-const ChromeWrapper = ({ children, isPreviewMode }: ChromeWrapperProps) => {
-  const navigatorLayout = useNavigatorLayout();
+const ChromeWrapper = ({
+  children,
+  isPreviewMode,
+  navigatorLayout,
+}: ChromeWrapperProps) => {
+  const activeSidebarPanel = useStore($activeSidebarPanel);
   const gridLayout = getChromeLayout({
     isPreviewMode,
     navigatorLayout,
+    activeSidebarPanel,
   });
 
   return (
     <Grid
       css={{
         height: "100vh",
-        minWidth: 530, // Enough space to show left sidebars before it becomes broken or unusable
         overflow: "hidden",
         display: "grid",
         gridTemplateRows: "auto 1fr auto",
@@ -196,150 +204,15 @@ const ChromeWrapper = ({ children, isPreviewMode }: ChromeWrapperProps) => {
   );
 };
 
-type NavigatorPanelProps = {
-  isPreviewMode: boolean;
-  navigatorLayout: "docked" | "undocked";
-  css: CSS;
-};
-
-const NavigatorPanel = ({
-  isPreviewMode,
-  navigatorLayout,
-  css,
-}: NavigatorPanelProps) => {
-  if (navigatorLayout === "docked") {
-    return;
-  }
-
-  return (
-    <SidePanel gridArea="navigator" isPreviewMode={isPreviewMode}>
-      <Box
-        css={{
-          borderRight: `1px solid ${theme.colors.borderMain}`,
-          width: theme.spacing[30],
-          height: "100%",
-          ...css,
-        }}
-      >
-        <NavigatorContent isClosable={false} />
-      </Box>
-    </SidePanel>
-  );
-};
-
-const revealAnimation = ({
-  show,
-  backgroundColor,
-}: {
-  show: boolean;
-  backgroundColor: string;
-}): CSS => ({
-  position: "relative",
-  "> ::after": {
-    content: "",
-    position: "absolute",
-    inset: 0,
-    zIndex: 1,
-    transitionDuration: "300ms",
-    pointerEvents: "none",
-    transitionProperty: "opacity",
-    backgroundColor,
-    opacity: show ? 0 : 1,
-  },
+const builderClient = new SyncClient({
+  role: "leader",
+  object: createObjectPool(),
+  storages: [new ServerSyncStorage()],
 });
-
-const $loadingState = computed(
-  [
-    $dataLoadingState,
-    $selectedInstanceRenderState,
-    $canvasIframeState,
-    $isPreviewMode,
-  ],
-  (
-    dataLoadingState,
-    selectedInstanceRenderState,
-    canvasIframeState,
-    isPreviewMode
-  ) => {
-    const readyStates = new Map<
-      "dataLoadingState" | "selectedInstanceRenderState" | "canvasIframeState",
-      boolean
-    >([
-      ["dataLoadingState", dataLoadingState === "loaded"],
-      [
-        "selectedInstanceRenderState",
-        selectedInstanceRenderState === "mounted" || isPreviewMode,
-      ],
-      ["canvasIframeState", canvasIframeState === "ready"],
-    ]);
-
-    const readyCount = Array.from(readyStates.values()).filter(Boolean).length;
-    const progress = Math.round((readyCount / readyStates.size) * 100);
-    const state: "ready" | "loading" =
-      readyCount === readyStates.size ? "ready" : "loading";
-
-    return { state, progress, readyStates };
-  }
-);
-
-const ProgressIndicator = ({ value }: { value: number }) => {
-  const [isDone, setIsDone] = useState(false);
-  const [fakeValue, setFakeValue] = useState(value);
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      setFakeValue((_fakeValue) => {
-        // Fetching data is the slowest part and we don't want to get stuck at 0% visually
-        return Math.max(value, 50);
-      });
-    }, 300);
-    return () => clearTimeout(id);
-  }, [value]);
-
-  if (isDone) {
-    return;
-  }
-
-  return (
-    <Flex
-      direction="column"
-      gap="3"
-      css={{
-        position: "absolute",
-        inset: 0,
-        justifyContent: "center",
-        alignItems: "center",
-        zIndex: 1,
-      }}
-    >
-      <WebstudioIcon
-        size={60}
-        style={{
-          filter: `
-            drop-shadow(3px 3px 6px rgba(0, 0, 0, 0.7))
-            brightness(${fakeValue}%)
-          `,
-          transitionProperty: "filter",
-          transitionDuration: "500ms",
-        }}
-      />
-      <Progress
-        value={fakeValue}
-        transitionDuration="500ms"
-        onTransitionEnd={() => {
-          if (value === 100) {
-            setIsDone(true);
-          }
-        }}
-      />
-    </Flex>
-  );
-};
 
 export type BuilderProps = {
   project: Project;
   publisherHost: string;
-  imageBaseUrl: string;
   build: Pick<Build, "id" | "version">;
   authToken?: string;
   authPermit: AuthPermit;
@@ -350,7 +223,6 @@ export type BuilderProps = {
 export const Builder = ({
   project,
   publisherHost,
-  imageBaseUrl,
   build,
   authToken,
   authPermit,
@@ -363,7 +235,6 @@ export const Builder = ({
     // additional data stores
     $project.set(project);
     $publisherHost.set(publisherHost);
-    $imageLoader.set(createImageLoader({ imageBaseUrl }));
     $authPermit.set(authPermit);
     $authToken.set(authToken);
     $userPlanFeatures.set(userPlanFeatures);
@@ -372,9 +243,9 @@ export const Builder = ({
     const controller = new AbortController();
 
     $dataLoadingState.set("loading");
-    loadBuilderData({ projectId: project.id, signal: controller.signal })
-      .then((data) => {
-        setBuilderData(data);
+    builderClient.connect({
+      signal: controller.signal,
+      onReady() {
         startProjectSync({
           projectId: project.id,
           buildId: build.id,
@@ -390,12 +261,10 @@ export const Builder = ({
         // so builder is started listening for connect event
         // when canvas is rendered
         $dataLoadingState.set("loaded");
-      })
-      .catch((error) => {
-        console.error(error);
+
         // @todo make needs error handling and error state? e.g. a toast
-        $dataLoadingState.set("idle");
-      });
+      },
+    });
     return () => {
       $dataLoadingState.set("idle");
       controller.abort("unmount");
@@ -417,29 +286,55 @@ export const Builder = ({
     $publisher.set({ publish });
   }, [publish]);
 
-  useBuilderStore(publish);
   useSyncServer({
     projectId: project.id,
     authPermit,
   });
   const isCloneDialogOpen = useStore($isCloneDialogOpen);
   const isPreviewMode = useStore($isPreviewMode);
-  const { onRef: onRefReadCanvas, onTransitionEnd } = useReadCanvasRect();
-  // We need to initialize this in both canvas and builder,
-  // because the events will fire in either one, depending on where the focus is
-  useCopyPaste();
+  const isDesignMode = useStore($isDesignMode);
+  const isContentMode = useStore($isContentMode);
+
   useSetWindowTitle();
-  const iframeRefCallback = useCallback(
-    (element: HTMLIFrameElement) => {
-      publishRef.current = element;
-      onRefReadCanvas(element);
-    },
-    [publishRef, onRefReadCanvas]
+
+  const iframeRefCallback = useMemo(
+    () =>
+      mergeRefs((element: HTMLIFrameElement | null) => {
+        if (element?.contentWindow) {
+          // added to iframe window and stored in local variable right away to prevent
+          // overriding in emebedded scripts on canvas
+          element.contentWindow.__webstudioSharedSyncEmitter__ =
+            builderClient.emitter;
+        }
+      }, publishRef),
+    [publishRef]
   );
 
-  const navigatorLayout = useNavigatorLayout();
+  const { navigatorLayout } = useStore($settings);
   const dataLoadingState = useStore($dataLoadingState);
   const [loadingState, setLoadingState] = useState(() => $loadingState.get());
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    if (isDesignMode) {
+      // We need to initialize this in both canvas and builder,
+      // because the events will fire in either one, depending on where the focus is
+      // @todo we need to forward the events from canvas to builder and avoid importing this
+      // in both places
+      initCopyPaste(abortController);
+      subscribeModifierKeys({ signal: abortController.signal });
+    }
+
+    if (isContentMode) {
+      initCopyPasteForContentEditMode(abortController);
+      subscribeModifierKeys({ signal: abortController.signal });
+    }
+
+    return () => {
+      abortController.abort();
+    };
+  }, [isContentMode, isDesignMode]);
 
   useEffect(() => {
     const unsubscribe = $loadingState.subscribe((loadingState) => {
@@ -452,73 +347,25 @@ export const Builder = ({
     return unsubscribe;
   }, []);
 
-  const canvasUrl = getBuildUrl({
-    project,
-  });
+  const canvasUrl = getCanvasUrl();
 
-  /**
-   * Prevents Lexical text editor from stealing focus during rendering.
-   * Sets the inert attribute on the canvas body element and disables the text editor.
-   *
-   * This must be done synchronously to avoid the following issue:
-   *
-   * 1. Text editor is in edit state.
-   * 2. User focuses on the builder (e.g., clicks any input).
-   * 3. The text editor blur event triggers, causing a rerender on data change (data saved in onBlur).
-   * 4. Text editor rerenders, stealing focus from the builder.
-   * 5. Inert attribute is set asynchronously, but focus is already lost.
-   *
-   * Synchronous focusing and setInert prevent the text editor from focusing on render.
-   * This cannot be handled inside the canvas because the text editor toolbar is in the builder and focus events in the canvas should be ignored.
-   *
-   * Use onPointerDown instead of onFocus because Radix focus lock triggers on text edit blur
-   * before the focusin event when editing text inside a Radix dialog.
-   */
-  const handlePointerDown = useCallback((event: React.PointerEvent) => {
-    // Ignore toolbar focus events. See the onFocus handler in text-toolbar.tsx
-    if (false === event.defaultPrevented) {
-      canvasApi.setInert();
-      $textEditingInstanceSelector.set(undefined);
-    }
-  }, []);
-
-  /**
-   * Prevent Radix from stealing focus during editing in the settings panel.
-   * For example, when the user modifies the text content of an H1 element inside a dialog.
-   */
-  const handleInput = useCallback(() => {
-    canvasApi.setInert();
-  }, []);
+  const inertHandlers = useInertHandlers();
 
   return (
     <TooltipProvider>
       <div
         style={{ display: "contents" }}
-        onPointerDown={handlePointerDown}
-        onInput={handleInput}
+        onPointerDown={inertHandlers.onPointerDown}
+        onInput={inertHandlers.onInput}
+        onKeyDown={inertHandlers.onKeyDown}
       >
-        <ChromeWrapper isPreviewMode={isPreviewMode}>
+        <ChromeWrapper
+          isPreviewMode={isPreviewMode}
+          navigatorLayout={navigatorLayout}
+        >
           <ProjectSettings />
-          <Topbar
-            project={project}
-            hasProPlan={userPlanFeatures.hasProPlan}
-            css={{
-              gridArea: "header",
-              ...revealAnimation({
-                // Looks nicer when topbar is already visible earlier, so user has more sense of progress.
-                show: loadingState.readyStates.get("dataLoadingState") ?? false,
-                backgroundColor: theme.colors.backgroundTopbar,
-              }),
-            }}
-          />
           <Main>
-            <Workspace
-              onTransitionEnd={onTransitionEnd}
-              css={revealAnimation({
-                show: loadingState.state === "ready",
-                backgroundColor: theme.colors.backgroundCanvas,
-              })}
-            >
+            <Workspace>
               {dataLoadingState === "loaded" && (
                 <CanvasIframe
                   ref={iframeRefCallback}
@@ -527,22 +374,13 @@ export const Builder = ({
                 />
               )}
             </Workspace>
-            <AiCommandBar isPreviewMode={isPreviewMode} />
           </Main>
-          <NavigatorPanel
-            isPreviewMode={isPreviewMode}
-            navigatorLayout={navigatorLayout}
-            css={revealAnimation({
-              show: loadingState.state === "ready",
-              backgroundColor: theme.colors.backgroundPanel,
-            })}
-          />
+
           <SidePanel
             gridArea="sidebar"
-            css={revealAnimation({
-              show: loadingState.state === "ready",
-              backgroundColor: theme.colors.backgroundPanel,
-            })}
+            css={{
+              order: navigatorLayout === "docked" ? 1 : undefined,
+            }}
           >
             <SidebarLeft publish={publish} />
           </SidePanel>
@@ -551,23 +389,59 @@ export const Builder = ({
             isPreviewMode={isPreviewMode}
             css={{
               overflow: "hidden",
-              ...revealAnimation({
-                show: loadingState.state === "ready",
-                backgroundColor: theme.colors.backgroundPanel,
-              }),
+              // Drawing border this way to ensure content still has full width, avoid subpixels and give layout round numbers
+              "&::after": {
+                content: "''",
+                position: "absolute",
+                top: 0,
+                left: 0,
+                bottom: 0,
+                width: 1,
+                background: theme.colors.borderMain,
+              },
             }}
           >
             <Inspector navigatorLayout={navigatorLayout} />
           </SidePanel>
+          <Main css={{ pointerEvents: "none" }}>
+            <CanvasToolsContainer />
+          </Main>
+          <Topbar
+            project={project}
+            hasProPlan={userPlanFeatures.hasProPlan}
+            css={{ gridArea: "header" }}
+            loading={
+              <LoadingBackground
+                // Looks nicer when topbar is already visible earlier, so user has more sense of progress.
+                show={
+                  loadingState.readyStates.get("dataLoadingState")
+                    ? false
+                    : true
+                }
+              />
+            }
+          />
+          <Main css={{ pointerEvents: "none" }}>
+            <TextToolbar />
+          </Main>
           {isPreviewMode === false && <Footer />}
-          <BlockingAlerts />
           <CloneProjectDialog
             isOpen={isCloneDialogOpen}
             onOpenChange={$isCloneDialogOpen.set}
             project={project}
+            onCreate={(projectId) => {
+              window.location.href = builderUrl({
+                origin: window.origin,
+                projectId: projectId,
+              });
+            }}
           />
         </ChromeWrapper>
-        <ProgressIndicator value={loadingState.progress} />
+        {isDesignMode && <AiCommandBar />}
+        <Loading state={loadingState} />
+        <BlockingAlerts />
+        <CommandPanel />
+        <RemoteDialog />
       </div>
     </TooltipProvider>
   );

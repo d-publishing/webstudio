@@ -4,6 +4,7 @@ import {
   Label,
   theme,
   SectionTitle,
+  Grid,
 } from "@webstudio-is/design-system";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CollapsibleSectionRoot } from "~/builder/shared/collapsible-section";
@@ -13,9 +14,11 @@ export const CollapsibleDomainSection = ({
   children,
   title,
   suffix,
+  prefix,
 }: {
   initiallyOpen?: boolean;
   children: ReactNode;
+  prefix: ReactNode;
   suffix: ReactNode;
   title: string;
 }) => {
@@ -53,13 +56,16 @@ export const CollapsibleDomainSection = ({
             </Box>
           }
         >
-          <Label truncate>{title}</Label>
+          <Grid gap="1" flow="column" align="center" justify="start">
+            {prefix}
+            <Label truncate>{title}</Label>
+          </Grid>
         </SectionTitle>
       }
     >
       <Flex
         css={{
-          mx: theme.spacing[9],
+          paddingInline: theme.panel.paddingInline,
           overflowWrap: "anywhere",
         }}
         gap={2}

@@ -8,10 +8,12 @@ import {
   ToolbarButton,
   Text,
   type CSS,
+  Tooltip,
+  Kbd,
 } from "@webstudio-is/design-system";
 import type { Project } from "@webstudio-is/project";
-import { $pages, $selectedPage } from "~/shared/nano-states";
-import { PreviewButton } from "./preview";
+import { $editingPageId, $pages } from "~/shared/nano-states";
+
 import { ShareButton } from "./share";
 import { PublishButton } from "./publish";
 import { SyncStatus } from "./sync-status";
@@ -21,8 +23,12 @@ import {
   BreakpointsPopover,
 } from "../breakpoints";
 import { ViewMode } from "./view-mode";
-import { $activeSidebarPanel } from "~/builder/shared/nano-states";
 import { AddressBarPopover } from "../address-bar";
+import { toggleActiveSidebarPanel } from "~/builder/shared/nano-states";
+import type { ReactNode } from "react";
+import { CloneButton } from "./clone";
+import { $selectedPage } from "~/shared/awareness";
+import { BuilderModeDropDown } from "./builder-mode";
 
 const PagesButton = () => {
   const page = useStore($selectedPage);
@@ -31,40 +37,56 @@ const PagesButton = () => {
   }
 
   return (
-    <ToolbarButton
-      css={{
-        px: theme.spacing[9],
-        maxWidth: theme.spacing[24],
-      }}
-      aria-label="Toggle Pages"
-      onClick={() => {
-        $activeSidebarPanel.set(
-          $activeSidebarPanel.get() === "pages" ? "none" : "pages"
-        );
-      }}
-      tabIndex={0}
+    <Tooltip
+      content={
+        <Text>
+          {"Pages or page settings "}
+          <Kbd value={["alt", "click"]} color="moreSubtle" />
+        </Text>
+      }
     >
-      <Text truncate>{page.name}</Text>
-    </ToolbarButton>
+      <ToolbarButton
+        css={{ paddingInline: theme.panel.paddingInline }}
+        aria-label="Toggle Pages"
+        onClick={(event) => {
+          $editingPageId.set(event.altKey ? page.id : undefined);
+          toggleActiveSidebarPanel("pages");
+        }}
+        tabIndex={0}
+      >
+        <Text truncate css={{ maxWidth: theme.spacing[24] }}>
+          {page.name}
+        </Text>
+      </ToolbarButton>
+    </Tooltip>
   );
 };
 
 const topbarContainerStyle = css({
+  position: "relative",
   display: "flex",
   background: theme.colors.backgroundTopbar,
   height: theme.spacing[15],
-  boxShadow: `inset 0 -1px 0 0 ${theme.colors.panelOutline}`,
-  paddingRight: theme.spacing[9],
+  paddingRight: theme.panel.paddingInline,
   color: theme.colors.foregroundContrastMain,
 });
 
-type TopbarProps = {
-  css: CSS;
-  project: Project;
-  hasProPlan: boolean;
+// We are hiding some elements on mobile because we want to let user
+// test in preview mode with device simulators
+const hideOnMobile: CSS = {
+  "@media (max-width: 640px)": {
+    display: "none",
+  },
 };
 
-export const Topbar = ({ css, project, hasProPlan }: TopbarProps) => {
+type TopbarProps = {
+  project: Project;
+  hasProPlan: boolean;
+  loading: ReactNode;
+  css: CSS;
+};
+
+export const Topbar = ({ project, hasProPlan, css, loading }: TopbarProps) => {
   const pages = useStore($pages);
   return (
     <nav className={topbarContainerStyle({ css })}>
@@ -79,11 +101,11 @@ export const Topbar = ({ css, project, hasProPlan }: TopbarProps) => {
             <PagesButton />
             <AddressBarPopover />
           </Flex>
-          <Flex css={{ minWidth: theme.spacing[23] }}>
+          <Flex css={{ minWidth: theme.spacing[23], ...hideOnMobile }}>
             <BreakpointsPopover />
           </Flex>
           <Flex grow></Flex>
-          <Flex align="center" justify="center">
+          <Flex align="center" justify="center" css={hideOnMobile}>
             <BreakpointsSelectorContainer />
           </Flex>
         </>
@@ -93,6 +115,7 @@ export const Topbar = ({ css, project, hasProPlan }: TopbarProps) => {
         <ToolbarToggleGroup
           type="single"
           css={{
+            isolation: "isolate",
             justifyContent: "flex-end",
             gap: theme.spacing[5],
             width: theme.spacing[30],
@@ -100,11 +123,14 @@ export const Topbar = ({ css, project, hasProPlan }: TopbarProps) => {
         >
           <ViewMode />
           <SyncStatus />
-          <PreviewButton />
+
+          <BuilderModeDropDown />
           <ShareButton projectId={project.id} hasProPlan={hasProPlan} />
           <PublishButton projectId={project.id} />
+          <CloneButton />
         </ToolbarToggleGroup>
       </Toolbar>
+      {loading}
     </nav>
   );
 };

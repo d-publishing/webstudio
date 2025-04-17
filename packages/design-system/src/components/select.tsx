@@ -3,12 +3,14 @@ import {
   type ReactNode,
   type Ref,
   type ComponentProps,
+  type JSX,
   useMemo,
   forwardRef,
   useState,
+  useEffect,
+  useRef,
 } from "react";
-import { ChevronDownIcon, ChevronUpIcon } from "@webstudio-is/icons";
-import { rawTheme, styled, theme } from "../stitches.config";
+import { styled, theme } from "../stitches.config";
 import {
   menuCss,
   menuItemCss,
@@ -19,6 +21,7 @@ import {
 } from "./menu";
 import { SelectButton } from "./select-button";
 import { Box } from "./box";
+import { ScrollArea } from "./scroll-area";
 
 export const SelectContent = styled(Primitive.Content, menuCss, {
   "&[data-side=top]": {
@@ -48,7 +51,7 @@ const scrollButtonStyles = {
   alignItems: "center",
   justifyContent: "center",
   height: 25,
-  color: theme.colors.hiContrast,
+  color: theme.colors.foregroundMain,
   cursor: "default",
 };
 
@@ -220,9 +223,23 @@ const SelectBase = <Option,>(
 
   const descriptions = options.map((option) => getDescription?.(option));
 
+  // Allow reset select fix https://github.com/radix-ui/primitives/issues/2706
+  const [selectResetKeyFix, setSelectResetKeyFix] = useState(0);
+  const prevValue = useRef(value);
+
+  useEffect(() => {
+    if (prevValue.current !== undefined && value === undefined) {
+      setSelectResetKeyFix((prev) => prev + 1);
+    }
+
+    prevValue.current = value;
+  }, [value]);
+
   return (
     <Primitive.Root
+      key={selectResetKeyFix}
       name={name}
+      // null because of https://github.com/radix-ui/primitives/issues/2706
       value={value === undefined ? undefined : getValue(value)}
       defaultValue={
         defaultValue === undefined ? undefined : getValue(defaultValue)
@@ -243,41 +260,43 @@ const SelectBase = <Option,>(
       </Primitive.Trigger>
       <Primitive.Portal>
         <SelectContent position="popper">
-          <SelectScrollUpButton css={{ order: 1 }}>
-            <ChevronUpIcon />
-          </SelectScrollUpButton>
-
-          <SelectViewport style={{ order: 1, maxHeight: rawTheme.spacing[34] }}>
-            {children ||
-              options.map((option, index) => {
-                const value = getValue(option) ?? "";
-                const { textValue, ...rest } = getItemProps?.(option) ?? {};
-                return (
-                  <SelectItem
-                    key={value ?? index}
-                    value={value}
-                    textValue={textValue ?? value}
-                    onFocus={() => {
-                      onItemHighlight?.(option);
-                      setHighlightedItem(option);
-                    }}
-                    onBlur={() => {
-                      onItemHighlight?.(undefined);
-                      setHighlightedItem(undefined);
-                    }}
-                    text="sentence"
-                    {...rest}
-                  >
-                    {getLabel(option)}
-                  </SelectItem>
-                );
-              })}
-          </SelectViewport>
-
-          <SelectScrollDownButton css={{ order: 2 }}>
-            <ChevronDownIcon />
-          </SelectScrollDownButton>
-
+          <Box
+            css={{
+              display: "flex",
+              flexDirection: "column",
+              maxHeight: theme.spacing[34],
+              order: 1,
+            }}
+          >
+            <ScrollArea>
+              <SelectViewport>
+                {children ||
+                  options.map((option, index) => {
+                    const value = getValue(option) ?? "";
+                    const { textValue, ...rest } = getItemProps?.(option) ?? {};
+                    return (
+                      <SelectItem
+                        key={value ?? index}
+                        value={value}
+                        textValue={textValue ?? value}
+                        onFocus={() => {
+                          onItemHighlight?.(option);
+                          setHighlightedItem(option);
+                        }}
+                        onBlur={() => {
+                          onItemHighlight?.(undefined);
+                          setHighlightedItem(undefined);
+                        }}
+                        text="sentence"
+                        {...rest}
+                      >
+                        {getLabel(option)}
+                      </SelectItem>
+                    );
+                  })}
+              </SelectViewport>
+            </ScrollArea>
+          </Box>
           {description && (
             <SelectItemDescription descriptions={descriptions}>
               {description}

@@ -2,11 +2,12 @@ import { access } from "node:fs/promises";
 import { exit } from "node:process";
 import { log } from "@clack/prompts";
 import { prebuild } from "../prebuild";
-import { LOCAL_DATA_FILE, PROJECT_TEMPALTES } from "../config";
+import { LOCAL_DATA_FILE, PROJECT_TEMPLATES } from "../config";
 import type {
   CommonYargsArgv,
   StrictYargsOptionsToInterface,
 } from "./yargs-types";
+import { mapToTemplatesFromOptions } from "../build-utils";
 
 export const buildOptions = (yargs: CommonYargsArgv) =>
   yargs
@@ -15,18 +16,16 @@ export const buildOptions = (yargs: CommonYargsArgv) =>
       default: true,
       describe: "[Experimental] Download assets",
     })
-    .option("preview", {
-      type: "boolean",
-      default: false,
-      describe: "[Experimental] Use preview version of the project",
-    })
     .option("template", {
       type: "array",
       string: true,
       default: [] as string[],
-      describe: `Template to use for the build [choices: ${PROJECT_TEMPALTES.join(
-        ", "
-      )}]`,
+
+      coerce: mapToTemplatesFromOptions,
+
+      describe: `Template to use for the build [choices: ${PROJECT_TEMPLATES.map(
+        (item) => item.value
+      ).join(", ")}]`,
     });
 
 // @todo: use options.assets to define if we need to download assets

@@ -4,8 +4,8 @@ import {
   type WsComponentPropsMeta,
   type PresetStyle,
   defaultStates,
-} from "@webstudio-is/react-sdk";
-import { label } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { label } from "@webstudio-is/sdk/normalize.css";
 import { props } from "./__generated__/label.props";
 import type { defaultTag } from "./label";
 
@@ -17,30 +17,14 @@ const presetStyle = {
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  category: "forms",
-  invalidAncestors: ["Button", "Label"],
   type: "container",
   label: "Input Label",
   icon: LabelIcon,
   states: defaultStates,
   presetStyle,
-  order: 2,
-  template: [
-    {
-      type: "instance",
-      component: "Label",
-      children: [{ type: "text", value: "Form Label", placeholder: true }],
-    },
-  ],
 };
 
 export const propsMeta: WsComponentPropsMeta = {
-  props: {
-    ...props,
-    htmlFor: {
-      ...props.htmlFor,
-      label: "For",
-    },
-  },
+  props,
   initialProps: ["id", "className", "htmlFor"],
 };

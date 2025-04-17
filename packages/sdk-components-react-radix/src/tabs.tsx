@@ -1,22 +1,40 @@
-import {
-  type ComponentPropsWithoutRef,
-  type ForwardRefExoticComponent,
-  forwardRef,
-  type ComponentProps,
-  type RefAttributes,
-} from "react";
+import interactionResponse from "await-interaction-response";
+import { type ComponentPropsWithoutRef, forwardRef, useCallback } from "react";
+import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Root, List, Trigger, Content } from "@radix-ui/react-tabs";
-import {
-  getClosestInstance,
-  getIndexWithinAncestorFromComponentProps,
-  getInstanceSelectorById,
-  type Hook,
-} from "@webstudio-is/react-sdk";
+import { getIndexWithinAncestorFromProps } from "@webstudio-is/sdk/runtime";
+import { getClosestInstance, type Hook } from "@webstudio-is/react-sdk/runtime";
 
-export const Tabs: ForwardRefExoticComponent<
-  Omit<ComponentProps<typeof Root>, "asChild" | "defaultValue"> &
-    RefAttributes<HTMLDivElement>
-> = Root;
+export const Tabs = forwardRef<
+  HTMLDivElement,
+  Omit<ComponentPropsWithoutRef<typeof Root>, "value" | "onValueChange"> & {
+    value?: string;
+    onValueChange?: (value: string) => void;
+  }
+>(({ defaultValue, ...props }, ref) => {
+  const [value, onValueChange] = useControllableState({
+    prop: props.value,
+    defaultProp: defaultValue,
+    onChange: props.onValueChange,
+  });
+
+  const handleValueChange = useCallback(
+    async (value: string) => {
+      await interactionResponse();
+      onValueChange(value);
+    },
+    [onValueChange]
+  );
+
+  return (
+    <Root
+      ref={ref}
+      {...props}
+      value={value}
+      onValueChange={handleValueChange}
+    />
+  );
+});
 
 export const TabsList = List;
 
@@ -24,7 +42,7 @@ export const TabsTrigger = forwardRef<
   HTMLButtonElement,
   Omit<ComponentPropsWithoutRef<typeof Trigger>, "value"> & { value?: string }
 >(({ value, ...props }, ref) => {
-  const index = getIndexWithinAncestorFromComponentProps(props);
+  const index = getIndexWithinAncestorFromProps(props);
   return <Trigger ref={ref} value={value ?? index ?? ""} {...props} />;
 });
 
@@ -32,7 +50,7 @@ export const TabsContent = forwardRef<
   HTMLDivElement,
   Omit<ComponentPropsWithoutRef<typeof Content>, "value"> & { value?: string }
 >(({ value, ...props }, ref) => {
-  const index = getIndexWithinAncestorFromComponentProps(props);
+  const index = getIndexWithinAncestorFromProps(props);
   return <Content ref={ref} value={value ?? index ?? ""} {...props} />;
 });
 
@@ -46,21 +64,40 @@ const namespace = "@webstudio-is/sdk-components-react-radix";
 export const hooksTabs: Hook = {
   onNavigatorSelect: (context, event) => {
     for (const instance of event.instancePath) {
-      if (instance.component === `${namespace}:TabsContent`) {
+      if (
+        instance.component === `${namespace}:TabsContent` ||
+        instance.component === `${namespace}:TabsTrigger`
+      ) {
         const tabs = getClosestInstance(
           event.instancePath,
           instance,
           `${namespace}:Tabs`
         );
         const contentValue =
-          context.getPropValue(instance.id, "value") ??
+          context.getPropValue(instance, "value") ??
           context.indexesWithinAncestors.get(instance.id)?.toString();
         if (tabs && contentValue) {
-          const instanceSelector = getInstanceSelectorById(
-            event.instanceSelector,
-            tabs.id
-          );
-          context.setMemoryProp(instanceSelector, "value", contentValue);
+          context.setMemoryProp(tabs, "value", contentValue);
+        }
+      }
+    }
+  },
+  onNavigatorUnselect: (context, event) => {
+    for (const instance of event.instancePath) {
+      if (
+        instance.component === `${namespace}:TabsContent` ||
+        instance.component === `${namespace}:TabsTrigger`
+      ) {
+        const tabs = getClosestInstance(
+          event.instancePath,
+          instance,
+          `${namespace}:Tabs`
+        );
+        const contentValue =
+          context.getPropValue(instance, "value") ??
+          context.indexesWithinAncestors.get(instance.id)?.toString();
+        if (tabs && contentValue) {
+          context.setMemoryProp(tabs, "value", undefined);
         }
       }
     }

@@ -1,5 +1,9 @@
-import { createContext, useContext } from "react";
+import { createContext, useContext, useMemo } from "react";
 import type { ImageLoader } from "@webstudio-is/image";
+import {
+  createJsonStringifyProxy,
+  isPlainObject,
+} from "@webstudio-is/sdk/runtime";
 
 export type Params = {
   /**
@@ -8,17 +12,6 @@ export type Params = {
    * - preview is the preview mode in builder
    */
   renderer?: "canvas" | "preview";
-  /**
-   * Base url ir base path for images with ending slash.
-   * Used for configuring image with different sizes.
-   * Concatinated with "name?width=&quality=&format=".
-   *
-   * For example
-   * /asset/image/ used by default in builder
-   * https://image-transform.wstd.io/cdn-cgi/image/
-   * https://webstudio.is/cdn-cgi/image/
-   */
-  imageBaseUrl: string;
   /**
    * Base url or base path for any asset with ending slash.
    * Used to load assets like fonts or images in styles
@@ -39,15 +32,24 @@ export const ReactSdkContext = createContext<
     // resources need to be any to support accessing unknown fields without extra checks
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resources: Record<string, any>;
+    breakpoints: { id: string; minWidth?: number; maxWidth?: number }[];
   }
 >({
   assetBaseUrl: "/",
-  imageBaseUrl: "/",
   imageLoader: ({ src }) => src,
   resources: {},
+  breakpoints: [],
 });
 
 export const useResource = (name: string) => {
   const { resources } = useContext(ReactSdkContext);
-  return resources[name];
+  const resource = resources[name];
+
+  const resourceMemozied = useMemo(
+    () =>
+      isPlainObject(resource) ? createJsonStringifyProxy(resource) : resource,
+    [resource]
+  );
+
+  return resourceMemozied;
 };

@@ -15,14 +15,14 @@ import * as outline from "./outline/outline";
 import * as advanced from "./advanced/advanced";
 import * as textShadows from "./text-shadows/text-shadows";
 import * as backdropFilter from "./backdrop-filter/backdrop-filter";
-import type { StyleProperty } from "@webstudio-is/css-engine";
-import type { SectionProps } from "./shared/section";
+import * as transforms from "./transforms/transforms";
+import type { CssProperty } from "@webstudio-is/css-engine";
 
 export const sections = new Map<
   string,
   {
-    properties: StyleProperty[];
-    Section: (props: SectionProps) => ReactNode;
+    properties: CssProperty[];
+    Section: () => ReactNode;
   }
 >([
   ["layout", layout],
@@ -39,6 +39,7 @@ export const sections = new Map<
   ["filter", filter],
   ["backdropFilters", backdropFilter],
   ["transitions", transitions],
+  ["transfrom", transforms],
   ["outline", outline],
   ["advanced", advanced],
 ]);

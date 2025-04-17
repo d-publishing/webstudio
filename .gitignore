@@ -20,6 +20,7 @@ _build
 # misc
 .DS_Store
 *.pem
+!https/*.pem
 /.idea
 
 # logs
@@ -60,3 +61,6 @@ dist
 
 # should be here otherwise if placed inside prisma-client pnpm deploy doesn't copy it
 packages/prisma-client/src/__generated__
+
+.temp
+*.timestamp-*.mjs

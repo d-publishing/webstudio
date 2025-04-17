@@ -494,14 +494,142 @@ export const propertiesGenerated = {
   viewTransitionName: "Sets a custom name for a transition effect",
   whiteSpaceCollapse:
     "Specifies how white space inside an element is collapsed",
-} as const;
+  "-webkit-box-orient":
+    "Controls the direction of flex items in a flex container.",
+  "-webkit-line-clamp":
+    "Truncates text to a specific number of lines in a container.",
+  "-webkit-overflow-scrolling":
+    "Controls whether or not touch events trigger overflow scrolling.",
+  "-webkit-tap-highlight-color":
+    "Sets the highlight color of links and form controls if tapped.",
+  fieldSizing:
+    "Controls the algorithm used to calculate the width of form controls.",
+  zoom: "Specifies the zoom level of a document.",
+  animation:
+    "Animations make it possible to animate transitions from one CSS style configuration to another.",
+  background:
+    "The background property is a shorthand for setting multiple background properties at once.",
+  border:
+    "Borders outline the border area of an element and are used for decoration and visual separation.",
+  "border-block":
+    "The border-block property is a shorthand for setting the individual properties for the vertical block axis borders.",
+  "border-block-end":
+    "The border-block-end property is a shorthand for setting the individual properties for the end block axis border.",
+  "border-block-start":
+    "The border-block-start property is a shorthand for setting the individual properties for the start block axis border.",
+  "border-bottom":
+    "The border-bottom property is a shorthand for setting the individual properties for the bottom border.",
+  "border-color":
+    "The border-color property sets the color of the four borders around an element.",
+  "border-image":
+    "The border-image property is a shorthand for setting the border-image-source, border-image-slice, border-image-width, and border-image-repeat properties.",
+  "border-inline":
+    "The border-inline property is a shorthand for setting the individual properties for the inline axis borders.",
+  "border-inline-end":
+    "The border-inline-end property is a shorthand for setting the individual properties for the end inline axis border.",
+  "border-inline-start":
+    "The border-inline-start property is a shorthand for setting the individual properties for the start inline axis border.",
+  "border-left":
+    "The border-left property is a shorthand for setting the individual properties for the left border.",
+  "border-radius":
+    "Border-radius is used to create rounded corners on an element's box.",
+  "border-right":
+    "The border-right property is a shorthand for setting the individual properties for the right border.",
+  "border-style":
+    "The border-style property sets the style of the four borders.",
+  "border-top": "Controls the top border of an element.",
+  "border-width": "Sets the width of the borders of an element.",
+  "column-rule": "Manages the line drawn between columns.",
+  columns: "Specifies the number and width of columns.",
+  "contain-intrinsic-size":
+    "Defines the size of an element's intrinsic content.",
+  container: "Establishes a new block formatting context.",
+  flex: "Specifies the length of a flexible item.",
+  "flex-flow": "Sets how flex items are placed in the flex container.",
+  font: "Specifies font styles for text.",
+  gap: "Sets the gap between grid items.",
+  grid: "Defines a grid or a subgrid.",
+  "grid-area": "Specifies the size of a grid item.",
+  "grid-column": "Specifies a grid item's position within the grid.",
+  "grid-row": "Specifies a grid item's row within the grid.",
+  "grid-template": "Sets the values for grid layout properties.",
+  inset: "Specifies the position of an element.",
+  "inset-block":
+    "Controls the block axis position of an absolutely positioned element.",
+  "inset-inline":
+    "Controls the inline axis position of an absolutely positioned element.",
+  "list-style": "Sets all the properties for a list in one declaration.",
+  margin: "Sets the margin on all four sides of an element at once.",
+  "margin-block": "Sets the margin on the block axis of an element.",
+  "margin-inline": "Sets the margin on the inline axis of an element.",
+  mask: "Lets you use an image or a CSS gradient to define the shape of the mask.",
+  "mask-border":
+    "Lets you use an image or a CSS gradient to define the border image of the mask.",
+  offset: "Controls the positioning of a positioned element.",
+  outline: "Sets the style of the outline around an element.",
+  padding: "Sets the padding on all four sides of an element at once.",
+  "padding-block": "Sets the padding on the block axis of an element.",
+  "padding-inline": "Sets the padding on the inline axis of an element.",
+  "place-content": "Aligns a flex container's lines within it.",
+  "place-items": "Aligns a flex container's items within it.",
+  "place-self": "Allows the default alignment of a flex item to be overridden.",
+  "scroll-margin": "Controls the top and bottom sides of the scrollbar",
+  "scroll-margin-block": "Controls the top and bottom sides of the scrollbar",
+  "scroll-margin-inline": "Controls the left and right sides of the scrollbar",
+  "scroll-padding":
+    "Sets the amount of space between the element's content and its padding",
+  "scroll-padding-block":
+    "Sets the amount of space between the element's content and its top and bottom padding",
+  "scroll-padding-inline":
+    "Sets the amount of space between the element's content and its left and right padding",
+  "text-decoration":
+    "Adds decoration to text, such as underlines or line-through",
+  "text-emphasis": "Sets special emphasis on text, like dots or circles",
+} as Record<string, string | undefined>;
 
-export const propertiesOverrides = {} as const;
+export const propertiesOverrides = {} as Record<string, string | undefined>;
+
+export const propertySyntaxesGenerated = {
+  boxShadowOffsetX: "Controls the offset distance of the shadow on the X-axis.",
+  boxShadowOffsetY: "Controls the offset distance of the shadow on the Y-axis.",
+  boxShadowBlurRadius: "Controls the blur radius of the shadow.",
+  boxShadowSpreadRadius: "Controls the spread radius of the shadow.",
+  boxShadowColor: "Controls the color of the shadow.",
+  boxShadowPosition: "Controls the positioning of the shadow.",
+  textShadowOffsetX:
+    "Controls the offset distance of the text shadow on the X-axis.",
+  textShadowOffsetY:
+    "Controls the offset distance of the text shadow on the Y-axis.",
+  textShadowBlurRadius: "Controls the blur radius of the text shadow.",
+  textShadowColor: "Controls the color of the text shadow.",
+  dropShadowOffsetX:
+    "Controls the offset distance of the drop shadow on the X-axis.",
+  dropShadowOffsetY:
+    "Controls the offset distance of the drop shadow on the Y-axis.",
+  dropShadowBlurRadius: "Controls the blur radius of the drop shadow.",
+  dropShadowColor: "Controls the color of the drop shadow.",
+  translateX: "Controls the translation of an element on the X-axis.",
+  translateY: "Controls the translation of an element on the Y-axis.",
+  translateZ: "Specifies the position of the z axis within the 3D workspace.",
+  rotateX: "Applies a 3D rotation to an element around the x-axis.",
+  rotateY: "Applies a 3D rotation to an element around the y-axis.",
+  rotateZ: "Applies a 3D rotation to an element around the z-axis.",
+  scaleX: "Applies a scale transformation to an element on the x-axis.",
+  scaleY: "Applies a scale transformation to an element on the y-axis.",
+  scaleZ: "Applies a scale transformation to an element on the z-axis.",
+  skewX: "Skews an element in the horizontal direction.",
+  skewY: "Skews an element in the vertical direction.",
+  transformOriginX: "Sets the origin of transformation for the x-axis.",
+  transformOriginY: "Sets the origin of transformation for the y-axis.",
+  transformOriginZ: "Sets the origin of transformation for the z-axis.",
+  perspectiveOriginX: "Sets the origin of perspective for the x-axis.",
+  perspectiveOriginY: "Sets the origin of perspective for the y-axis.",
+} as Record<string, string | undefined>;
 
 export const properties = {
   ...propertiesGenerated,
   ...propertiesOverrides,
-} as const;
+} as Record<string, string | undefined>;
 
 export const declarationsGenerated = {
   "alignContent:normal":
@@ -4290,11 +4418,43 @@ export const declarationsGenerated = {
     "Aligns the last line of text to the start of the line.",
   "textDecorationLine:unset":
     "Resets the text decoration line to its initial value.",
-} as const;
+  "-webkit-box-orient:horizontal":
+    "Specifies the box orientation as horizontal.",
+  "-webkit-box-orient:vertical": "Specifies the box orientation as vertical.",
+  "-webkit-line-clamp:none": "Limits the number of lines for text to none.",
+  "-webkit-line-clamp:initial":
+    "Resets the number of lines for text to its initial value.",
+  "-webkit-line-clamp:inherit":
+    "Sets the number of lines for text to inherit from the parent element.",
+  "-webkit-line-clamp:unset":
+    "Sets the number of lines for text to the initial value.",
+  "-webkit-overflow-scrolling:auto":
+    "Enables smooth scrolling with the overflow behavior auto.",
+  "-webkit-overflow-scrolling:touch":
+    "Enables smooth scrolling with the overflow behavior touch.",
+  "-webkit-overflow-scrolling:initial":
+    "Resets the overflow behavior to the initial value.",
+  "-webkit-overflow-scrolling:inherit":
+    "Sets the overflow behavior to inherit from the parent element.",
+  "-webkit-overflow-scrolling:unset":
+    "Sets the overflow behavior to the initial value.",
+  "fieldSizing:content": "Adjusts the sizing of form elements to content.",
+  "fieldSizing:fixed": "Adjusts the sizing of form elements to a fixed value.",
+  "fieldSizing:initial":
+    "Resets the sizing of form elements to the initial value.",
+  "fieldSizing:inherit":
+    "Sets the sizing of form elements to inherit from the parent element.",
+  "fieldSizing:unset": "Sets the sizing of form elements to the initial value.",
+  "zoom:normal": "Zooms the specified element to its initial size.",
+  "zoom:reset": "Resets the zoom level to the default value.",
+  "zoom:initial": "Sets the zoom level to the default value.",
+  "zoom:inherit": "Inherits the zoom level from the parent element.",
+  "zoom:unset": "Unsets the zoom level, allowing the browser to decide.",
+} as Record<string, string | undefined>;
 
-export const declarationsOverrides = {} as const;
+export const declarationsOverrides = {} as Record<string, string | undefined>;
 
 export const declarations = {
   ...declarationsGenerated,
   ...declarationsOverrides,
-} as const;
+} as Record<string, string | undefined>;

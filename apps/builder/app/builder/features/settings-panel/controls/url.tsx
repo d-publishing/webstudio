@@ -1,9 +1,8 @@
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useId, useMemo } from "react";
 import { useStore } from "@nanostores/react";
 import { computed } from "nanostores";
 import {
   theme,
-  useId,
   InputField,
   Flex,
   ToggleGroup,
@@ -39,10 +38,11 @@ import {
   updateExpressionValue,
   $selectedInstanceScope,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
 import { SelectAsset } from "./select-asset";
 import { createRootFolder } from "@webstudio-is/project-build";
-import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../property-label";
 
 type UrlControlProps = ControlProps<"url">;
 
@@ -53,7 +53,6 @@ type BaseControlProps = {
   prop: UrlControlProps["prop"];
   value: string;
   onChange: UrlControlProps["onChange"];
-  onDelete: UrlControlProps["onDelete"];
 };
 
 const Row = ({ children }: { children: ReactNode }) => (
@@ -405,12 +404,11 @@ const BasePage = ({ prop, onChange }: BaseControlProps) => {
   );
 };
 
-const BaseAttachment = ({ prop, onChange, onDelete }: BaseControlProps) => (
+const BaseAttachment = ({ prop, onChange }: BaseControlProps) => (
   <Row>
     <SelectAsset
       prop={prop?.type === "asset" ? prop : undefined}
       onChange={onChange}
-      onDelete={onDelete}
     />
   </Row>
 );
@@ -462,9 +460,7 @@ export const UrlControl = ({
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: UrlControlProps) => {
   const value = String(computedValue ?? "");
   const { value: mode, set: setMode } = useLocalValue<Mode>(
@@ -476,7 +472,7 @@ export const UrlControl = ({
 
   const BaseControl = modes[mode].control;
 
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -485,15 +481,7 @@ export const UrlControl = ({
   );
 
   return (
-    <VerticalLayout
-      label={
-        <Label htmlFor={id} description={meta.description}>
-          {label}
-        </Label>
-      }
-      deletable={deletable}
-      onDelete={onDelete}
-    >
+    <VerticalLayout label={<PropertyLabel name={propName} />}>
       <Flex
         css={{
           py: theme.spacing[2],
@@ -529,7 +517,6 @@ export const UrlControl = ({
           prop={prop}
           value={value}
           onChange={onChange}
-          onDelete={onDelete}
         />
         <BindingPopover
           scope={scope}

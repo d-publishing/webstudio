@@ -1,11 +1,23 @@
-import { forwardRef, useMemo, type ComponentProps, useEffect } from "react";
+import {
+  forwardRef,
+  useMemo,
+  type ComponentProps,
+  useEffect,
+  type ReactNode,
+} from "react";
+import { styleTags, tags } from "@lezer/highlight";
 import {
   keymap,
   tooltips,
   highlightSpecialChars,
   highlightActiveLine,
 } from "@codemirror/view";
-import { bracketMatching, indentOnInput } from "@codemirror/language";
+import {
+  bracketMatching,
+  indentOnInput,
+  LanguageSupport,
+  LRLanguage,
+} from "@codemirror/language";
 import {
   autocompletion,
   closeBrackets,
@@ -13,58 +25,30 @@ import {
   completionKeymap,
 } from "@codemirror/autocomplete";
 import { html } from "@codemirror/lang-html";
-import { theme, textVariants, css } from "@webstudio-is/design-system";
-import { CodeEditorBase, getMinMaxHeightVars } from "./code-editor-base";
-
-const autocompletionStyle = css({
-  "&.cm-tooltip.cm-tooltip-autocomplete": {
-    ...textVariants.mono,
-    border: "none",
-    backgroundColor: "transparent",
-    // override none set on body by radix popover
-    pointerEvents: "auto",
-    "& ul": {
-      minWidth: 160,
-      maxWidth: 260,
-      width: "max-content",
-      boxSizing: "border-box",
-      borderRadius: theme.borderRadius[6],
-      backgroundColor: theme.colors.backgroundMenu,
-      border: `1px solid ${theme.colors.borderMain}`,
-      boxShadow: `${theme.shadows.menuDropShadow}, inset 0 0 0 1px ${theme.colors.borderMenuInner}`,
-      padding: theme.spacing[3],
-      "& li": {
-        ...textVariants.labelsTitleCase,
-        textTransform: "none",
-        position: "relative",
-        display: "flex",
-        alignItems: "center",
-        color: theme.colors.foregroundMain,
-        padding: theme.spacing[3],
-        borderRadius: theme.borderRadius[3],
-        "&[aria-selected], &:hover": {
-          color: theme.colors.foregroundMain,
-          backgroundColor: theme.colors.backgroundItemMenuItemHover,
-        },
-        "& .cm-completionLabel": {
-          flexGrow: 1,
-        },
-        "& .cm-completionDetail": {
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          fontStyle: "normal",
-          color: theme.colors.hint,
-        },
-      },
-    },
-  },
-});
+import { markdown } from "@codemirror/lang-markdown";
+import { css } from "@webstudio-is/design-system";
+import {
+  EditorContent,
+  EditorDialog,
+  EditorDialogButton,
+  EditorDialogControl,
+  foldGutterExtension,
+  getMinMaxHeightVars,
+} from "./code-editor-base";
+import { cssCompletionSource, cssLanguage } from "@codemirror/lang-css";
 
 const wrapperStyle = css({
   position: "relative",
-  // 1 line is 16px
-  // set min 10 lines and max 20 lines
-  ...getMinMaxHeightVars({ minHeight: "160px", maxHeight: "320px" }),
+
+  variants: {
+    size: {
+      default: getMinMaxHeightVars({ minHeight: "160px", maxHeight: "320px" }),
+      keyframe: getMinMaxHeightVars({ minHeight: "60px", maxHeight: "120px" }),
+    },
+  },
+  defaultVariants: {
+    size: "default",
+  },
 });
 
 const getHtmlExtensions = () => [
@@ -77,21 +61,93 @@ const getHtmlExtensions = () => [
   // render autocomplete in body
   // to prevent popover scroll overflow
   tooltips({ parent: document.body }),
-  autocompletion({
-    icons: false,
-    tooltipClass: () => autocompletionStyle.toString(),
-    closeOnBlur: false,
-  }),
+  autocompletion({ icons: false }),
   keymap.of([...closeBracketsKeymap, ...completionKeymap]),
+];
+
+const getMarkdownExtensions = () => [
+  highlightActiveLine(),
+  highlightSpecialChars(),
+  indentOnInput(),
+  markdown({
+    extensions: [
+      {
+        props: [
+          styleTags({
+            HorizontalRule: tags.separator,
+            HeaderMark: tags.annotation,
+            QuoteMark: tags.annotation,
+            ListMark: tags.annotation,
+            LinkMark: tags.annotation,
+            EmphasisMark: tags.annotation,
+            CodeMark: tags.annotation,
+            InlineCode: tags.string,
+            URL: tags.url,
+          }),
+        ],
+      },
+    ],
+  }),
+  bracketMatching(),
+  closeBrackets(),
+  keymap.of(closeBracketsKeymap),
+];
+
+const cssPropertiesLanguage = LRLanguage.define({
+  name: "css",
+  parser: cssLanguage.configure({ top: "Styles" }).parser,
+});
+const cssProperties = new LanguageSupport(
+  cssPropertiesLanguage,
+  cssPropertiesLanguage.data.of({
+    autocomplete: cssCompletionSource,
+  })
+);
+
+const getCssPropertiesExtensions = () => [
+  highlightActiveLine(),
+  highlightSpecialChars(),
+  indentOnInput(),
+  cssProperties,
+  // render autocomplete in body
+  // to prevent popover scroll overflow
+  tooltips({ parent: document.body }),
+  autocompletion({ icons: false }),
 ];
 
 export const CodeEditor = forwardRef<
   HTMLDivElement,
-  Omit<ComponentProps<typeof CodeEditorBase>, "extensions"> & { lang?: "html" }
->(({ lang, ...props }, ref) => {
-  const extensions = useMemo(
-    () => (lang === "html" ? getHtmlExtensions() : []),
-    [lang]
+  Omit<ComponentProps<typeof EditorContent>, "extensions"> & {
+    lang?: "html" | "markdown" | "css-properties";
+    title?: ReactNode;
+    size?: "default" | "keyframe";
+  }
+>(({ lang, title, size, ...editorContentProps }, ref) => {
+  const extensions = useMemo(() => {
+    if (lang === "html") {
+      return getHtmlExtensions();
+    }
+
+    if (lang === "markdown") {
+      return getMarkdownExtensions();
+    }
+
+    if (lang === "css-properties") {
+      return getCssPropertiesExtensions();
+    }
+
+    if (lang === undefined) {
+      return [];
+    }
+
+    lang satisfies never;
+
+    return [];
+  }, [lang]);
+
+  const dialogExtensions = useMemo(
+    () => [...extensions, foldGutterExtension],
+    [extensions]
   );
 
   // prevent clicking on autocomplete options propagating to body
@@ -111,10 +167,22 @@ export const CodeEditor = forwardRef<
       document.removeEventListener("pointerdown", handlePointerDown, options);
     };
   }, []);
-
   return (
-    <div className={wrapperStyle()} ref={ref}>
-      <CodeEditorBase {...props} extensions={extensions} />
+    <div className={wrapperStyle({ size })} ref={ref}>
+      <EditorDialogControl>
+        <EditorContent {...editorContentProps} extensions={extensions} />
+        <EditorDialog
+          title={title}
+          content={
+            <EditorContent
+              {...editorContentProps}
+              extensions={dialogExtensions}
+            />
+          }
+        >
+          <EditorDialogButton />
+        </EditorDialog>
+      </EditorDialogControl>
     </div>
   );
 });

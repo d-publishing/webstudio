@@ -1,15 +1,15 @@
-import type { Asset } from "./schema/assets";
+import type { Asset, Assets } from "./schema/assets";
 import type { DataSources } from "./schema/data-sources";
 import type { Page } from "./schema/pages";
 import { type Scope, createScope } from "./scope";
-import { generateExpression } from "./expression";
+import { generateExpression, SYSTEM_VARIABLE_ID } from "./expression";
 
 export type PageMeta = {
   title: string;
   description?: string;
   excludePageFromSearch?: boolean;
   language?: string;
-  socialImageAssetId?: Asset["id"];
+  socialImageAssetName?: Asset["name"];
   socialImageUrl?: string;
   status?: number;
   redirect?: string;
@@ -20,10 +20,12 @@ export const generatePageMeta = ({
   globalScope,
   page,
   dataSources,
+  assets,
 }: {
   globalScope: Scope;
   page: Page;
   dataSources: DataSources;
+  assets: Assets;
 }) => {
   // reserve parameter names passed to generated function
   const localScope = createScope(["system", "resources"]);
@@ -52,8 +54,10 @@ export const generatePageMeta = ({
     usedDataSources,
     scope: localScope,
   });
-  const socialImageAssetIdExpression = JSON.stringify(
+  const socialImageAssetNameExpression = JSON.stringify(
     page.meta.socialImageAssetId
+      ? assets.get(page.meta.socialImageAssetId)?.name
+      : undefined
   );
   const socialImageUrlExpression = generateExpression({
     expression: page.meta.socialImageUrl ?? "undefined",
@@ -108,7 +112,10 @@ export const generatePageMeta = ({
       continue;
     }
     if (dataSource.type === "parameter") {
-      if (dataSource.id === page.systemDataSourceId) {
+      if (
+        dataSource.id === page.systemDataSourceId ||
+        dataSource.id === SYSTEM_VARIABLE_ID
+      ) {
         const valueName = localScope.getName(dataSource.id, dataSource.name);
         generated += `  let ${valueName} = system\n`;
       }
@@ -130,7 +137,7 @@ export const generatePageMeta = ({
   generated += `    description: ${descriptionExpression},\n`;
   generated += `    excludePageFromSearch: ${excludePageFromSearchExpression},\n`;
   generated += `    language: ${languageExpression},\n`;
-  generated += `    socialImageAssetId: ${socialImageAssetIdExpression},\n`;
+  generated += `    socialImageAssetName: ${socialImageAssetNameExpression},\n`;
   generated += `    socialImageUrl: ${socialImageUrlExpression},\n`;
   generated += `    status: ${statusExpression},\n`;
   generated += `    redirect: ${redirectExpression},\n`;

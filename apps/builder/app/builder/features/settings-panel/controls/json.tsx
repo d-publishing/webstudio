@@ -5,7 +5,6 @@ import {
   type ControlProps,
   useLocalValue,
   VerticalLayout,
-  Label,
   updateExpressionValue,
   $selectedInstanceScope,
   useBindingState,
@@ -18,16 +17,13 @@ import {
   BindingControl,
   BindingPopover,
 } from "~/builder/shared/binding-popover";
-import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../property-label";
 
 export const JsonControl = ({
-  meta,
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: ControlProps<"json">) => {
   const [error, setError] = useState<boolean>(false);
   const valueString = formatValue(computedValue ?? "");
@@ -50,7 +46,6 @@ export const JsonControl = ({
       // empty block
     }
   });
-  const label = humanizeString(meta.label || propName);
 
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression = prop?.type === "expression" ? prop.value : valueString;
@@ -61,12 +56,8 @@ export const JsonControl = ({
   return (
     <VerticalLayout
       label={
-        <Label description={meta.description} readOnly={overwritable === false}>
-          {label}
-        </Label>
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
       }
-      deletable={deletable}
-      onDelete={onDelete}
     >
       <BindingControl>
         <ExpressionEditor
@@ -74,7 +65,7 @@ export const JsonControl = ({
           readOnly={overwritable === false}
           value={localValue.value}
           onChange={localValue.set}
-          onBlur={localValue.save}
+          onChangeComplete={localValue.save}
         />
         <BindingPopover
           scope={scope}

@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "@remix-run/react";
+import { useRevalidator } from "@remix-run/react";
+import { useEffect, useState, type JSX } from "react";
 import {
   Box,
   Button,
   Flex,
   Label,
   Text,
-  DeprecatedTextField,
+  InputField,
   DialogActions,
   Dialog as BaseDialog,
   DialogTrigger,
@@ -17,12 +17,10 @@ import {
   theme,
 } from "@webstudio-is/design-system";
 import { PlusIcon } from "@webstudio-is/icons";
-import type { DashboardProject } from "@webstudio-is/prisma-client";
 import { Title } from "@webstudio-is/project";
-import { builderPath } from "~/shared/router-utils";
+import { builderUrl } from "~/shared/router-utils";
 import { ShareProjectContainer } from "~/shared/share-project";
 import { trpcClient } from "~/shared/trpc/trpc-client";
-import { useRevalidator } from "@remix-run/react";
 
 type DialogProps = {
   title: string;
@@ -76,14 +74,14 @@ const DialogContent = ({
       onSubmit={(event) => {
         event.preventDefault();
         const formData = new FormData(event.currentTarget as HTMLFormElement);
-        const title = String(formData.get("title") ?? "");
+        const title = String(formData.get("title") ?? "").trim();
         onSubmit({ title });
       }}
     >
       <Flex
         direction="column"
         css={{
-          px: theme.spacing["9"],
+          px: theme.spacing["7"],
           paddingTop: theme.spacing["5"],
           width,
         }}
@@ -95,11 +93,11 @@ const DialogContent = ({
           </DialogDescription>
         )}
         {typeof label === "string" ? <Label>{label}</Label> : label}
-        <DeprecatedTextField
+        <InputField
           placeholder={placeholder}
           name="title"
           defaultValue={title}
-          state={errors ? "invalid" : undefined}
+          color={errors ? "error" : undefined}
           onChange={(event) => {
             onChange?.({ title: event.currentTarget.value });
           }}
@@ -110,7 +108,7 @@ const DialogContent = ({
       </Flex>
       <DialogActions>
         {primaryButton}
-        <DialogClose asChild>
+        <DialogClose>
           <Button color="ghost">Cancel</Button>
         </DialogClose>
       </DialogActions>
@@ -119,23 +117,25 @@ const DialogContent = ({
 };
 
 const useCreateProject = () => {
-  const navigate = useNavigate();
   const { send, state } = trpcClient.dashboardProject.create.useMutation();
   const [errors, setErrors] = useState<string>();
-  const revalidator = useRevalidator();
 
   const handleSubmit = ({ title }: { title: string }) => {
     const parsed = Title.safeParse(title);
     const errors =
       "error" in parsed
-        ? parsed.error.issues.map((issue) => issue.message).join("\n")
+        ? parsed.error?.issues.map((issue) => issue.message).join("\n")
         : undefined;
     setErrors(errors);
     if (parsed.success) {
       send({ title }, (data) => {
-        revalidator.revalidate();
+        console.info("data");
+
         if (data?.id) {
-          navigate(builderPath({ projectId: data.id }));
+          window.location.href = builderUrl({
+            origin: window.origin,
+            projectId: data.id,
+          });
         }
       });
     }
@@ -154,7 +154,7 @@ const useCreateProject = () => {
 };
 
 export const CreateProject = ({
-  buttonText = "New Project",
+  buttonText = "New blank project",
 }: {
   buttonText?: string;
 }) => {
@@ -163,12 +163,12 @@ export const CreateProject = ({
   return (
     <Dialog
       title="New Project"
-      trigger={<Button prefix={<PlusIcon />}>{buttonText}</Button>}
+      trigger={<Button prefix={<PlusIcon size={12} />}>{buttonText}</Button>}
       onOpenChange={handleOpenChange}
     >
       <DialogContent
         onSubmit={handleSubmit}
-        placeholder="New Project"
+        placeholder="My Project"
         label="Project Title"
         errors={errors}
         primaryButton={
@@ -188,7 +188,7 @@ const useRenameProject = ({
   projectId,
   onOpenChange,
 }: {
-  projectId: DashboardProject["id"];
+  projectId: string;
   onOpenChange: (isOpen: boolean) => void;
 }) => {
   const { send, state } = trpcClient.dashboardProject.rename.useMutation();
@@ -199,7 +199,7 @@ const useRenameProject = ({
     const parsed = Title.safeParse(title);
     const errors =
       "error" in parsed
-        ? parsed.error.issues.map((issue) => issue.message).join("\n")
+        ? parsed.error?.issues.map((issue) => issue.message).join("\n")
         : undefined;
     setErrors(errors);
     if (parsed.success) {
@@ -225,7 +225,7 @@ export const RenameProjectDialog = ({
 }: {
   isOpen: boolean;
   title: string;
-  projectId: DashboardProject["id"];
+  projectId: string;
   onOpenChange: (isOpen: boolean) => void;
 }) => {
   const { handleSubmit, errors, state } = useRenameProject({
@@ -258,7 +258,7 @@ const useDeleteProject = ({
   onOpenChange,
   onHiddenChange,
 }: {
-  projectId: DashboardProject["id"];
+  projectId: string;
   title: string;
   onOpenChange: (isOpen: boolean) => void;
   onHiddenChange: (isHidden: boolean) => void;
@@ -285,7 +285,10 @@ const useDeleteProject = ({
   };
 
   const handleChange = ({ title: currentTitle }: { title: string }) => {
-    setIsMatch(currentTitle.trim().toLowerCase() === title.toLowerCase());
+    setIsMatch(
+      currentTitle.trim().toLocaleLowerCase() ===
+        title.trim().toLocaleLowerCase()
+    );
   };
 
   return {
@@ -306,7 +309,7 @@ export const DeleteProjectDialog = ({
 }: {
   isOpen: boolean;
   title: string;
-  projectId: DashboardProject["id"];
+  projectId: string;
   onOpenChange: (isOpen: boolean) => void;
   onHiddenChange: (isHidden: boolean) => void;
 }) => {
@@ -358,7 +361,7 @@ export const DeleteProjectDialog = ({
   );
 };
 
-export const useCloneProject = (projectId: DashboardProject["id"]) => {
+export const useCloneProject = (projectId: string) => {
   const { send } = trpcClient.dashboardProject.clone.useMutation();
   const revalidator = useRevalidator();
 
@@ -377,7 +380,7 @@ export const ShareProjectDialog = ({
 }: {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  projectId: DashboardProject["id"];
+  projectId: string;
   hasProPlan: boolean;
 }) => {
   return (

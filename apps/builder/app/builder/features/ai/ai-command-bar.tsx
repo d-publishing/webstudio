@@ -1,4 +1,3 @@
-import { formatDistance } from "date-fns/formatDistance";
 import {
   AutogrowTextArea,
   Box,
@@ -30,7 +29,6 @@ import { useRef, useState, type ComponentPropsWithoutRef } from "react";
 import {
   $collaborativeInstanceSelector,
   $selectedInstanceSelector,
-  $selectedPage,
 } from "~/shared/nano-states";
 import { useMediaRecorder } from "./hooks/media-recorder";
 import { useLongPressToggle } from "./hooks/long-press-toggle";
@@ -39,8 +37,10 @@ import { fetchTranscription } from "./ai-fetch-transcription";
 import { fetchResult } from "./ai-fetch-result";
 import { useEffectEvent } from "~/shared/hook-utils/effect-event";
 import { AiApiException, RateLimitException } from "./api-exceptions";
-import { useClientSettings } from "~/builder/shared/client-settings";
+import { getSetting, setSetting } from "~/builder/shared/client-settings";
 import { flushSync } from "react-dom";
+import { $selectedPage } from "~/shared/awareness";
+import { RelativeTime } from "~/builder/shared/relative-time";
 
 type PartialButtonProps<T = ComponentPropsWithoutRef<typeof Button>> = {
   [key in keyof T]?: T[key];
@@ -61,19 +61,17 @@ const initialPrompts = [
   "Create a testimonials section on 2 rows. The first row has a heading and subheading, the second row has 3 testimonial cards with an image, headline, description and link.",
 ];
 
-export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
+export const AiCommandBar = () => {
   const [value, setValue] = useState("");
   const [prompts, setPrompts] = useState<string[]>(initialPrompts);
-  const [clientSettings, setClientSetting, isClientSettingsLoaded] =
-    useClientSettings();
-  const isMenuOpen = isClientSettingsLoaded && clientSettings.isAiMenuOpen;
-  const setIsMenuOpen = useEffectEvent((value: boolean) =>
-    setClientSetting("isAiMenuOpen", value)
-  );
+  const isMenuOpen = getSetting("isAiMenuOpen");
+  const setIsMenuOpen = (value: boolean) => {
+    setSetting("isAiMenuOpen", value);
+  };
 
   const [isAudioTranscribing, setIsAudioTranscribing] = useState(false);
   const [isAiRequesting, setIsAiRequesting] = useState(false);
-  const abortController = useRef<AbortController>();
+  const abortController = useRef<undefined | AbortController>(undefined);
   const recordButtonRef = useRef<HTMLButtonElement>(null);
   const guardIdRef = useRef(0);
   const { enableCanvasPointerEvents, disableCanvasPointerEvents } =
@@ -119,19 +117,15 @@ export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
       } catch (error) {
         if (error instanceof RateLimitException) {
           toast.info(
-            `Temporary AI rate limit reached. Please wait ${formatDistance(
-              Date.now(),
-              new Date(error.meta.reset),
-              {
-                includeSeconds: true,
-              }
-            )} and try again.`
+            <>
+              Temporary AI rate limit reached. Please wait{" "}
+              <RelativeTime time={new Date(error.meta.reset)} /> and try again.
+            </>
           );
           return;
         }
 
         // Above are known errors; we're not interested in logging them.
-        // eslint-disable-next-line no-console
         console.error(error);
 
         if (error instanceof AiApiException) {
@@ -170,14 +164,9 @@ export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
     },
   });
 
-  if (isPreviewMode) {
-    return;
-  }
-
   const handleAiRequest = async (prompt: string) => {
     if (abortController.current) {
       if (abortController.current.signal.aborted === false) {
-        // eslint-disable-next-line no-console
         console.warn(`For some reason previous operation is not aborted.`);
       }
 
@@ -227,19 +216,15 @@ export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
 
       if (error instanceof RateLimitException) {
         toast.info(
-          `Temporary AI rate limit reached. Please wait ${formatDistance(
-            Date.now(),
-            new Date(error.meta.reset),
-            {
-              includeSeconds: true,
-            }
-          )} and try again.`
+          <>
+            Temporary AI rate limit reached. Please wait{" "}
+            <RelativeTime time={new Date(error.meta.reset)} /> and try again.
+          </>
         );
         return;
       }
 
       // Above is known errors, we are not interesting in
-      // eslint-disable-next-line no-console
       console.error(error);
 
       if (error instanceof AiApiException) {
@@ -276,10 +261,7 @@ export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
     selectPrompt();
   };
 
-  if (
-    isClientSettingsLoaded === false ||
-    clientSettings.isAiCommandBarVisible === false
-  ) {
+  if (getSetting("isAiCommandBarVisible") === false) {
     return;
   }
 
@@ -347,7 +329,7 @@ export const AiCommandBar = ({ isPreviewMode }: { isPreviewMode: boolean }) => {
     <Box
       css={{
         position: "absolute",
-        bottom: theme.spacing[11],
+        bottom: "5%",
         left: 0,
         right: 0,
         height: 0,

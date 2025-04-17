@@ -40,14 +40,15 @@ const ThumbnailContainer = styled(Box, {
   justifyContent: "center",
   alignItems: "center",
   flexDirection: "column",
-  margin: theme.spacing[2],
-  border: "2px solid transparent",
   borderRadius: theme.borderRadius[4],
-  outline: 0,
+  outline: "none",
   gap: theme.spacing[3],
   overflow: "hidden",
-  backgroundColor: theme.colors.slate4,
-  "&:hover": imageInfoTriggerCssVars({ show: true }),
+  padding: 2,
+  "&:hover": {
+    ...imageInfoTriggerCssVars({ show: true }),
+    backgroundColor: theme.colors.backgroundAssetcardHover,
+  },
   variants: {
     status: {
       uploading: {},
@@ -56,7 +57,10 @@ const ThumbnailContainer = styled(Box, {
     },
     state: {
       selected: {
-        boxShadow: `0px 0px 0px 2px ${theme.colors.blue10}, 0px 0px 0px 2px ${theme.colors.blue10}`,
+        outline: `1px solid ${theme.colors.borderFocus}`,
+        outlineOffset: -1,
+        backgroundColor: theme.colors.backgroundAssetcardHover,
+        ...imageInfoTriggerCssVars({ show: true }),
       },
     },
   },

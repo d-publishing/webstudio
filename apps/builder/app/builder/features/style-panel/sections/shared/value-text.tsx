@@ -1,20 +1,32 @@
 import { styled, Text } from "@webstudio-is/design-system";
 import type { StyleValue } from "@webstudio-is/css-engine";
-import { useMemo, type ComponentProps } from "react";
+import { useEffect, useMemo, type ComponentProps } from "react";
 import { theme } from "@webstudio-is/design-system";
 import { toValue } from "@webstudio-is/css-engine";
+import { scrollByPointer } from "../../shared/scroll-by-pointer";
 
 const Container = styled("button", {
   // fit-content is not needed for the "button" element,
   // leave it here in case of tag change
   width: "fit-content",
+  maxWidth: "100%",
   display: "flex",
-  flexWrap: "wrap",
+  flexWrap: "nowrap",
   alignItems: "baseline",
-  justifyContent: "center",
+  justifyContent: "start",
   border: "none",
   borderRadius: theme.borderRadius[3],
-  padding: `${theme.spacing[2]}`,
+  paddingBlock: theme.spacing[2],
+  paddingInline: 0,
+  overflow: "hidden",
+  whiteSpace: "nowrap",
+  // We want value to have `default` cursor to indicate that it's clickable,
+  // unlike the rest of the value area that has cursor that indicates scrubbing.
+  // Click and scrub works everywhere anyway, but we want cursors to be different.
+  //
+  // In order to have control over cursor we're setting pointerEvents to "all" here
+  // because SpaceLayout sets it to "none" for cells' content.
+  pointerEvents: "all",
 
   "&:focus-visible": {
     outline: "none",
@@ -45,7 +57,7 @@ const Container = styled("button", {
     },
   },
   compoundVariants: [
-    { source: "default", css: { color: theme.colors.slate12 } },
+    { source: "default", css: { color: theme.colors.foregroundTextSubtle } },
   ],
 });
 
@@ -85,18 +97,20 @@ export const ValueText = ({
     }
 
     if (value.type === "var") {
-      return <Text variant="spaceSectionValueText">--{value.value}</Text>;
+      return <Text variant="spaceSectionValueText">{value.value}</Text>;
     }
 
-    return (
-      <Text css={{}} variant="spaceSectionValueText">
-        {toValue(value)}
-      </Text>
-    );
+    return <Text variant="spaceSectionValueText">{toValue(value)}</Text>;
   }, [value, source]);
 
+  const { abort, ...autoScrollProps } = useMemo(scrollByPointer, []);
+
+  useEffect(() => {
+    return () => abort("unmount");
+  }, [abort]);
+
   return (
-    <Container source={source} {...rest} tabIndex={-1}>
+    <Container source={source} {...rest} {...autoScrollProps} tabIndex={-1}>
       {children}
     </Container>
   );

@@ -33,8 +33,7 @@ import {
   SelectSeparator,
   SelectGroup,
 } from "./select";
-import { MenuCheckedAndSetIcon, MenuSetDotIcon } from "./menu";
-import { DeprecatedTextField } from "./__DEPRECATED__/text-field";
+import { MenuCheckedAndSetIcon, MenuCheckedIcon, MenuSetDotIcon } from "./menu";
 import { Button } from "./button";
 import {
   ChevronDownIcon,
@@ -43,8 +42,9 @@ import {
   DotIcon,
 } from "@webstudio-is/icons";
 import { useState } from "react";
-import { DeprecatedIconButton } from "./__DEPRECATED__/icon-button";
 import { StorySection } from "./storybook";
+import { InputField } from "./input-field";
+import { NestedInputButton } from "./nested-input-button";
 
 const DropdownDemo = ({ withIndicator }: { withIndicator: boolean }) => {
   const [isApple, setIsApple] = useState(true);
@@ -124,8 +124,10 @@ const DropdownDemo = ({ withIndicator }: { withIndicator: boolean }) => {
               value={radioValue}
               onValueChange={setRadioValue}
             >
-              <DropdownMenuRadioItem value="apple">Apple</DropdownMenuRadioItem>
-              <DropdownMenuRadioItem value="orange">
+              <DropdownMenuRadioItem icon={<MenuCheckedIcon />} value="apple">
+                Apple
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem icon={<MenuCheckedIcon />} value="orange">
                 Orange
               </DropdownMenuRadioItem>
             </DropdownMenuRadioGroup>
@@ -154,7 +156,7 @@ const ComboboxDemo = () => {
     getMenuProps,
     getItemProps,
   } = useCombobox<Fruit>({
-    items: fruits,
+    getItems: () => fruits,
     itemToString: (item) => item ?? "",
     value: null,
     selectedItem,
@@ -180,13 +182,13 @@ const ComboboxDemo = () => {
     <ComboboxRoot open={isOpen}>
       <div {...getComboboxProps()}>
         <ComboboxAnchor>
-          <DeprecatedTextField
+          <InputField
             {...getInputProps()}
             placeholder="Enter: Apple"
             suffix={
-              <DeprecatedIconButton {...getToggleButtonProps()}>
+              <NestedInputButton {...getToggleButtonProps()}>
                 <ChevronDownIcon />
-              </DeprecatedIconButton>
+              </NestedInputButton>
             }
           />
         </ComboboxAnchor>

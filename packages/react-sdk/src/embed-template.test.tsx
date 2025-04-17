@@ -1,11 +1,8 @@
-import { expect, test } from "@jest/globals";
-import { generateDataFromEmbedTemplate, namespaceMeta } from "./embed-template";
+import { expect, test } from "vitest";
+import { generateDataFromEmbedTemplate } from "./embed-template";
 import { showAttribute } from "./props";
-import type { WsComponentMeta } from "./components/component-meta";
 
 const expectString = expect.any(String);
-
-const defaultBreakpointId = "base";
 
 test("generate data for embedding from instances and text", () => {
   expect(
@@ -21,8 +18,7 @@ test("generate data for embedding from instances and text", () => {
           ],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [
@@ -78,8 +74,7 @@ test("generate data for embedding from props", () => {
           ],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [{ type: "id", value: expectString }],
@@ -131,35 +126,34 @@ test("generate data for embedding from props", () => {
 });
 
 test("generate data for embedding from styles", () => {
-  expect(
-    generateDataFromEmbedTemplate(
-      [
-        {
-          type: "instance",
-          component: "Box1",
-          styles: [
-            { property: "width", value: { type: "keyword", value: "auto" } },
-            { property: "height", value: { type: "keyword", value: "auto" } },
-          ],
-          children: [
-            {
-              type: "instance",
-              component: "Box2",
-              styles: [
-                {
-                  property: "color",
-                  value: { type: "keyword", value: "black" },
-                },
-              ],
-              children: [],
-            },
-          ],
-        },
-      ],
-      new Map(),
-      defaultBreakpointId
-    )
-  ).toEqual({
+  const fragment = generateDataFromEmbedTemplate(
+    [
+      {
+        type: "instance",
+        component: "Box1",
+        styles: [
+          { property: "width", value: { type: "keyword", value: "auto" } },
+          { property: "height", value: { type: "keyword", value: "auto" } },
+        ],
+        children: [
+          {
+            type: "instance",
+            component: "Box2",
+            styles: [
+              {
+                property: "color",
+                value: { type: "keyword", value: "black" },
+              },
+            ],
+            children: [],
+          },
+        ],
+      },
+    ],
+    new Map()
+  );
+  const baseBreakpointId = fragment.breakpoints[0].id;
+  expect(fragment).toEqual({
     children: [{ type: "id", value: expectString }],
     instances: [
       {
@@ -199,21 +193,21 @@ test("generate data for embedding from styles", () => {
     ],
     styles: [
       {
-        breakpointId: "base",
+        breakpointId: baseBreakpointId,
         styleSourceId: expectString,
         state: undefined,
         property: "width",
         value: { type: "keyword", value: "auto" },
       },
       {
-        breakpointId: "base",
+        breakpointId: baseBreakpointId,
         styleSourceId: expectString,
         state: undefined,
         property: "height",
         value: { type: "keyword", value: "auto" },
       },
       {
-        breakpointId: "base",
+        breakpointId: baseBreakpointId,
         styleSourceId: expectString,
         state: undefined,
         property: "color",
@@ -221,7 +215,12 @@ test("generate data for embedding from styles", () => {
       },
     ],
     assets: [],
-    breakpoints: [],
+    breakpoints: [
+      {
+        id: baseBreakpointId,
+        label: "",
+      },
+    ],
     resources: [],
   });
 });
@@ -258,8 +257,7 @@ test("generate data for embedding from props bound to data source variables", ()
           children: [],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [
@@ -320,8 +318,7 @@ test("generate variables with aliases instead of reference name", () => {
           children: [],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [{ type: "id", value: expectString }],
@@ -382,8 +379,7 @@ test("generate data for embedding from props with complex expressions", () => {
           children: [],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [
@@ -475,8 +471,7 @@ test("generate data for embedding from action props", () => {
           ],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [{ type: "id", value: expectString }],
@@ -567,8 +562,7 @@ test("generate data for embedding from parameter props", () => {
         children: [],
       },
     ],
-    new Map(),
-    defaultBreakpointId
+    new Map()
   );
   const instanceId = data.instances[0].id;
   const variableId = data.dataSources[0].id;
@@ -635,8 +629,7 @@ test("generate data for embedding from instance child bound to variables", () =>
           children: [{ type: "expression", value: "myValue" }],
         },
       ],
-      new Map(),
-      defaultBreakpointId
+      new Map()
     )
   ).toEqual({
     children: [{ type: "id", value: expectString }],
@@ -669,168 +662,5 @@ test("generate data for embedding from instance child bound to variables", () =>
     assets: [],
     breakpoints: [],
     resources: [],
-  });
-});
-
-test("generate styles from tokens", () => {
-  const presetTokens: WsComponentMeta["presetTokens"] = {
-    box: {
-      styles: [
-        {
-          property: "width",
-          value: { type: "keyword", value: "max-content" },
-        },
-        {
-          property: "height",
-          value: { type: "keyword", value: "max-content" },
-        },
-      ],
-    },
-    boxBright: {
-      styles: [
-        {
-          property: "color",
-          value: { type: "keyword", value: "red" },
-        },
-        {
-          property: "backgroundColor",
-          value: { type: "keyword", value: "pink" },
-        },
-      ],
-    },
-    boxNone: {
-      styles: [
-        {
-          property: "color",
-          value: { type: "keyword", value: "transparent" },
-        },
-        {
-          property: "backgroundColor",
-          value: { type: "keyword", value: "transparent" },
-        },
-      ],
-    },
-  };
-  const { styleSourceSelections, styleSources, styles } =
-    generateDataFromEmbedTemplate(
-      [
-        {
-          type: "instance",
-          component: "Box",
-          tokens: ["box", "boxBright"],
-          children: [],
-        },
-      ],
-      new Map([["Box", { type: "container", icon: "", presetTokens }]]),
-      defaultBreakpointId
-    );
-  expect(styleSources).toEqual([
-    { id: "Box:box", name: "Box", type: "token" },
-    { id: "Box:boxBright", name: "Box Bright", type: "token" },
-  ]);
-  expect(styleSourceSelections).toEqual([
-    { instanceId: expectString, values: ["Box:box", "Box:boxBright"] },
-  ]);
-  expect(styles).toEqual([
-    {
-      breakpointId: "base",
-      property: "width",
-      styleSourceId: "Box:box",
-      value: { type: "keyword", value: "max-content" },
-    },
-    {
-      breakpointId: "base",
-      property: "height",
-      styleSourceId: "Box:box",
-      value: { type: "keyword", value: "max-content" },
-    },
-    {
-      breakpointId: "base",
-      property: "color",
-      styleSourceId: "Box:boxBright",
-      value: { type: "keyword", value: "red" },
-    },
-    {
-      breakpointId: "base",
-      property: "backgroundColor",
-      styleSourceId: "Box:boxBright",
-      value: { type: "keyword", value: "pink" },
-    },
-  ]);
-});
-
-test("add namespace to selected components in embed template", () => {
-  expect(
-    namespaceMeta(
-      {
-        type: "container",
-        label: "",
-        icon: "",
-        requiredAncestors: ["Button", "Box"],
-        invalidAncestors: ["Tooltip"],
-        indexWithinAncestor: "Tooltip",
-        presetTokens: {
-          base: { styles: [] },
-          small: { styles: [] },
-          large: { styles: [] },
-        },
-        template: [
-          {
-            type: "instance",
-            component: "Tooltip",
-            tokens: ["base", "small"],
-            children: [
-              { type: "text", value: "Some text" },
-              {
-                type: "instance",
-                component: "Box",
-                children: [
-                  {
-                    type: "instance",
-                    component: "Button",
-                    children: [],
-                  },
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      "my-namespace",
-      new Set(["Tooltip", "Button"])
-    )
-  ).toEqual({
-    type: "container",
-    label: "",
-    icon: "",
-    requiredAncestors: ["my-namespace:Button", "Box"],
-    invalidAncestors: ["my-namespace:Tooltip"],
-    indexWithinAncestor: "my-namespace:Tooltip",
-    presetTokens: {
-      base: { styles: [] },
-      small: { styles: [] },
-      large: { styles: [] },
-    },
-    template: [
-      {
-        type: "instance",
-        component: "my-namespace:Tooltip",
-        tokens: ["base", "small"],
-        children: [
-          { type: "text", value: "Some text" },
-          {
-            type: "instance",
-            component: "Box",
-            children: [
-              {
-                type: "instance",
-                component: "my-namespace:Button",
-                children: [],
-              },
-            ],
-          },
-        ],
-      },
-    ],
   });
 });

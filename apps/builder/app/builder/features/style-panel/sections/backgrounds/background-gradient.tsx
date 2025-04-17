@@ -1,15 +1,23 @@
-import type { InvalidValue, StyleValue } from "@webstudio-is/css-engine";
-import { parseCssValue } from "@webstudio-is/css-data";
 import {
-  Flex,
-  TextArea,
-  textVariants,
-  theme,
-} from "@webstudio-is/design-system";
+  toValue,
+  type InvalidValue,
+  type StyleValue,
+} from "@webstudio-is/css-engine";
+import { parseCssValue } from "@webstudio-is/css-data";
+import { Flex, Label, Text, theme, Tooltip } from "@webstudio-is/design-system";
 import { useEffect, useRef, useState } from "react";
-import type { ControlProps } from "../../controls";
-import { NonResetablePropertyName } from "../../shared/property-name";
-import { parseCssFragment } from "../../shared/parse-css-fragment";
+import { InfoCircleIcon } from "@webstudio-is/icons";
+import { setProperty } from "../../shared/use-style-data";
+import { useComputedStyleDecl } from "../../shared/model";
+import {
+  editRepeatedStyleItem,
+  setRepeatedStyleItem,
+} from "../../shared/repeated-style";
+import {
+  parseCssFragment,
+  CssFragmentEditor,
+  CssFragmentEditorContent,
+} from "../../shared/css-fragment";
 
 type IntermediateValue = {
   type: "intermediate";
@@ -19,24 +27,18 @@ type IntermediateValue = {
 const isTransparent = (color: StyleValue) =>
   color.type === "keyword" && color.value === "transparent";
 
-export const BackgroundGradient = (
-  props: Omit<ControlProps, "property" | "items"> & {
-    setBackgroundColor: (color: StyleValue) => void;
+export const BackgroundGradient = ({ index }: { index: number }) => {
+  const styleDecl = useComputedStyleDecl("background-image");
+  let styleValue = styleDecl.cascadedValue;
+  if (styleValue.type === "layers") {
+    styleValue = styleValue.value[index];
   }
-) => {
-  const property = "backgroundImage";
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
-
-  const styleInfo = props.currentStyle[property];
-  const styleValue = styleInfo?.value;
 
   const [intermediateValue, setIntermediateValue] = useState<
     IntermediateValue | InvalidValue | undefined
   >(undefined);
 
-  const textAreaValue =
-    intermediateValue?.value ??
-    (styleValue?.type === "unparsed" ? styleValue.value : undefined);
+  const textAreaValue = intermediateValue?.value ?? toValue(styleValue);
 
   const handleChange = (value: string) => {
     setIntermediateValue({
@@ -47,15 +49,17 @@ export const BackgroundGradient = (
     // This doesn't have the same behavior as CssValueInput.
     // However, it's great to see the immediate results when making gradient changes,
     // especially until we have a better gradient tool.
-    const newValue = parseCssValue(property, value);
+    const newValue = parseCssValue("background-image", value);
 
-    if (newValue.type === "unparsed") {
-      props.setProperty(property)(newValue, { isEphemeral: true });
+    if (newValue.type === "unparsed" || newValue.type === "var") {
+      setRepeatedStyleItem(styleDecl, index, newValue, { isEphemeral: true });
       return;
     }
 
     // Set backgroundImage at layer to none if it's invalid
-    props.setProperty(property)(
+    setRepeatedStyleItem(
+      styleDecl,
+      index,
       { type: "keyword", value: "none" },
       { isEphemeral: true }
     );
@@ -66,29 +70,33 @@ export const BackgroundGradient = (
       return;
     }
 
-    const parsed = parseCssFragment(intermediateValue.value, "background");
-    const backgroundImage = parsed.get("backgroundImage");
-    const backgroundColor = parsed.get("backgroundColor");
-    const [layer] =
-      backgroundImage?.type === "layers"
-        ? backgroundImage.value
-        : [backgroundImage];
+    const parsed = parseCssFragment(intermediateValue.value, [
+      "background-image",
+      "background",
+    ]);
+    const backgroundImage = parsed.get("background-image");
+    const backgroundColor = parsed.get("background-color");
 
     // set invalid state
-    if (
-      backgroundColor?.type === "invalid" ||
-      layer === undefined ||
-      layer.type === "invalid"
-    ) {
+    if (backgroundColor?.type === "invalid" || backgroundImage === undefined) {
       setIntermediateValue({ type: "invalid", value: intermediateValue.value });
-      props.deleteProperty(property, { isEphemeral: true });
+      if (styleValue) {
+        setRepeatedStyleItem(styleDecl, index, styleValue, {
+          isEphemeral: true,
+        });
+      }
       return;
     }
     setIntermediateValue(undefined);
     if (backgroundColor && isTransparent(backgroundColor) === false) {
-      props.setBackgroundColor(backgroundColor);
+      setProperty("background-color")(backgroundColor);
     }
-    props.setProperty(property)(layer);
+    // insert all new layers at current position
+    editRepeatedStyleItem(
+      [styleDecl],
+      index,
+      new Map([["background-image", backgroundImage]])
+    );
   };
 
   const handleOnCompleteRef = useRef(handleOnComplete);
@@ -106,54 +114,42 @@ export const BackgroundGradient = (
       direction="column"
       css={{
         gridColumn: "span 2",
-        px: theme.spacing[9],
-        paddingTop: theme.spacing[5],
-        paddingBottom: theme.spacing[9],
+        px: theme.spacing[5],
+        py: theme.spacing[5],
         gap: theme.spacing[3],
       }}
     >
-      <NonResetablePropertyName
-        style={props.currentStyle}
-        description={
-          <>
-            Paste a CSS gradient, for example:
-            <br />
-            <br />
-            linear-gradient(...)
-            <br />
-            <br />
-            If pasting from Figma, remove the "background" property name.
-          </>
-        }
-        properties={[property]}
-        label="Code"
-      />
-      <TextArea
-        ref={textAreaRef}
-        css={{ ...textVariants.mono }}
-        rows={2}
-        autoGrow
-        maxRows={4}
-        name="description"
-        value={textAreaValue ?? ""}
-        color={intermediateValue?.type === "invalid" ? "error" : undefined}
-        onChange={handleChange}
-        onBlur={handleOnComplete}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            handleOnComplete();
-            event.preventDefault();
-          }
-
-          if (event.key === "Escape") {
-            if (intermediateValue === undefined) {
-              return;
+      <Label>
+        <Flex align="center" gap="1">
+          Code
+          <Tooltip
+            variant="wrapped"
+            content={
+              <Text>
+                Paste a CSS gradient, for example:
+                <br />
+                <br />
+                linear-gradient(...)
+                <br />
+                <br />
+                If pasting from Figma, remove the "background" property name.
+              </Text>
             }
-            props.deleteProperty(property, { isEphemeral: true });
-            setIntermediateValue(undefined);
-            event.preventDefault();
-          }
-        }}
+          >
+            <InfoCircleIcon />
+          </Tooltip>
+        </Flex>
+      </Label>
+      <CssFragmentEditor
+        content={
+          <CssFragmentEditorContent
+            invalid={intermediateValue?.type === "invalid"}
+            autoFocus={styleValue.type === "var"}
+            value={textAreaValue ?? ""}
+            onChange={handleChange}
+            onChangeComplete={handleOnComplete}
+          />
+        }
       />
     </Flex>
   );

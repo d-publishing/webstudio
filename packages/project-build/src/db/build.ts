@@ -1,17 +1,13 @@
 /* eslint no-console: ["error", { allow: ["time", "timeEnd"] }] */
 
 import { nanoid } from "nanoid";
-import {
-  type Build as DbBuild,
-  type $Enums,
-  prisma,
-  Prisma,
-} from "@webstudio-is/prisma-client";
+import type { Database } from "@webstudio-is/postrest/index.server";
 import {
   AuthorizationError,
   authorizeProject,
   type AppContext,
 } from "@webstudio-is/trpc-interface/index.server";
+import { db as authDb } from "@webstudio-is/authorization-token/index.server";
 import {
   type Deployment,
   type Resource,
@@ -20,23 +16,43 @@ import {
   type DataSource,
   type Instance,
   type Breakpoint,
+  type StyleSourceSelection,
+  type StyleDecl,
   Pages,
   initialBreakpoints,
 } from "@webstudio-is/sdk";
-import type { Data } from "@webstudio-is/http-client";
-import type { Build } from "../types";
-import { parseStyles } from "./styles";
-import { parseStyleSourceSelections } from "./style-source-selections";
-import { parseDeployment, serializeDeployment } from "./deployment";
-import { parsePages, serializePages } from "./pages";
+import type { Build, CompactBuild } from "../types";
+import { parseDeployment } from "./deployment";
+import { serializePages } from "./pages";
 import { createDefaultPages } from "../shared/pages-utils";
-import type { MarketplaceProduct } from "..";
-import { z } from "zod";
+import type { MarketplaceProduct } from "../shared//marketplace";
+import { breakCyclesMutable } from "../shared/graph-utils";
+
+const parseCompactData = <Item>(serialized: string) =>
+  JSON.parse(serialized) as Item[];
+
+const parseCompactInstanceData = (serialized: string) => {
+  const instances = JSON.parse(serialized) as Instance[];
+
+  // @todo: Remove after measurements on real data
+  console.time("breakCyclesMutable");
+  breakCyclesMutable(instances, (node) => node.component === "Slot");
+  console.timeEnd("breakCyclesMutable");
+
+  return instances;
+};
 
 export const parseData = <Type extends { id: string }>(
   string: string
 ): Map<Type["id"], Type> => {
   const list = JSON.parse(string) as Type[];
+  return new Map(list.map((item) => [item.id, item]));
+};
+
+export const parseInstanceData = (
+  string: string
+): Map<Instance["id"], Instance> => {
+  const list = parseCompactInstanceData(string);
   return new Map(list.map((item) => [item.id, item]));
 };
 
@@ -55,96 +71,154 @@ export const serializeConfig = <Type>(data: Type) => {
   return JSON.stringify(data);
 };
 
-const parseBuild = async (build: DbBuild): Promise<Build> => {
-  console.time("parseBuild");
+const parseCompactBuild = async (
+  build: Database["public"]["Tables"]["Build"]["Row"]
+) => {
   try {
-    const pages = parsePages(build.pages);
-    const styles = Array.from(parseStyles(build.styles));
-    const styleSourceSelections = Array.from(
-      parseStyleSourceSelections(build.styleSourceSelections)
-    );
-    const deployment = parseDeployment(build.deployment);
-
-    const result: Build = {
+    return {
       id: build.id,
       projectId: build.projectId,
       version: build.version,
-      createdAt: build.createdAt.toISOString(),
-      updatedAt: build.updatedAt.toISOString(),
-      pages,
-      breakpoints: Array.from(parseData<Breakpoint>(build.breakpoints)),
-      styles,
-      styleSources: Array.from(parseData<StyleSource>(build.styleSources)),
-      styleSourceSelections,
-      props: Array.from(parseData<Prop>(build.props)),
-      dataSources: Array.from(parseData<DataSource>(build.dataSources)),
-      resources: Array.from(parseData<Resource>(build.resources)),
-      instances: Array.from(parseData<Instance>(build.instances)),
-      deployment,
+      createdAt: build.createdAt,
+      updatedAt: build.updatedAt,
+      pages: parseConfig<Pages>(build.pages),
+      breakpoints: parseCompactData<Breakpoint>(build.breakpoints),
+      styles: parseCompactData<StyleDecl>(build.styles),
+      styleSources: parseCompactData<StyleSource>(build.styleSources),
+      styleSourceSelections: parseCompactData<StyleSourceSelection>(
+        build.styleSourceSelections
+      ),
+      props: parseCompactData<Prop>(build.props),
+      dataSources: parseCompactData<DataSource>(build.dataSources),
+      resources: parseCompactData<Resource>(build.resources),
+      instances: parseCompactInstanceData(build.instances),
+      deployment: parseDeployment(build.deployment),
       marketplaceProduct: parseConfig<MarketplaceProduct>(
         build.marketplaceProduct
       ),
-    } satisfies Data["build"] & { marketplaceProduct: MarketplaceProduct };
-    return result;
+    } satisfies CompactBuild;
   } finally {
-    console.timeEnd("parseBuild");
+    // empty block
   }
 };
 
-export const loadBuildById = async (
+export const loadRawBuildById = async (
+  context: AppContext,
   id: Build["id"]
-): Promise<Build | undefined> => {
-  const build = await prisma.build.findUnique({
-    where: { id },
-  });
+) => {
+  const build = await context.postgrest.client
+    .from("Build")
+    .select("*")
+    .eq("id", id);
+  // .single(); Note: Single response is not compressed. Uncomment the following line once the issue is resolved: https://github.com/orgs/supabase/discussions/28757
 
-  if (build === null) {
-    return;
+  if (build.error) {
+    throw build.error;
   }
 
-  return parseBuild(build);
+  if (build.data.length !== 1) {
+    throw new Error(
+      `Results contain ${build.data.length} row(s) requires 1 row`
+    );
+  }
+
+  return build.data[0];
 };
 
-export const loadBuildByProjectId = async (
+export const loadBuildById = async (context: AppContext, id: Build["id"]) => {
+  const build = await loadRawBuildById(context, id);
+
+  return parseCompactBuild(build);
+};
+
+export const loadBuildIdAndVersionByProjectId = async (
+  context: AppContext,
   projectId: Build["projectId"]
-): Promise<Build> => {
-  const build = await prisma.build.findFirst({
-    where: { projectId, deployment: null },
-  });
+): Promise<{ id: string; version: number }> => {
+  const build = await context.postgrest.client
+    .from("Build")
+    .select("id,version")
+    .eq("projectId", projectId)
+    .is("deployment", null);
+  // .single(); Note: Single response is not compressed. Uncomment the following line once the issue is resolved: https://github.com/orgs/supabase/discussions/28757
 
-  if (build === null) {
-    throw new Error("Dev build not found");
+  if (build.error) {
+    throw build.error;
   }
 
-  return parseBuild(build);
+  if (build.data.length !== 1) {
+    throw new Error(
+      `Results contain ${build.data.length} row(s) requires 1 row`
+    );
+  }
+
+  return build.data[0];
 };
 
-export const loadProdBuildByProjectId = async (
-  projectId: Build["projectId"],
-  where: {
-    marketplaceApprovalStatus?: $Enums.MarketplaceApprovalStatus;
-  }
-): Promise<Build> => {
-  const projectData = await prisma.project.findUnique({
-    where: {
-      ...where,
-      id_isDeleted: { id: projectId, isDeleted: false },
-    },
-    select: {
-      latestBuild: {
-        select: {
-          build: true,
-        },
-      },
-    },
-  });
+export const loadDevBuildByProjectId = async (
+  context: AppContext,
+  projectId: Build["projectId"]
+) => {
+  const build = await context.postgrest.client
+    .from("Build")
+    .select("*")
+    .eq("projectId", projectId)
+    .is("deployment", null);
+  // .single(); Note: Single response is not compressed. Uncomment the following line once the issue is resolved: https://github.com/orgs/supabase/discussions/28757
 
-  const build = projectData?.latestBuild?.build;
-  if (build === undefined) {
-    throw new Error("Prod build not found");
+  if (build.error) {
+    throw build.error;
   }
 
-  return parseBuild(build);
+  if (build.data.length !== 1) {
+    throw new Error(
+      `Results contain ${build.data.length} row(s) requires 1 row`
+    );
+  }
+
+  return parseCompactBuild(build.data[0]);
+};
+
+export const loadApprovedProdBuildByProjectId = async (
+  context: AppContext,
+  projectId: Build["projectId"]
+) => {
+  const project = await context.postgrest.client
+    .from("Project")
+    .select(
+      `
+        id,
+        latestBuildVirtual(buildId)
+      `
+    )
+    .eq("id", projectId)
+    .eq("isDeleted", false)
+    .eq("marketplaceApprovalStatus", "APPROVED")
+    .single();
+  if (project.error) {
+    throw project.error;
+  }
+  if (project.data.latestBuildVirtual === null) {
+    throw Error("Build not found");
+  }
+
+  const build = await context.postgrest.client
+    .from("Build")
+    .select()
+    .eq("id", project.data.latestBuildVirtual.buildId);
+  // .single(); Note: Single response is not compressed. Uncomment the following line once the issue is resolved: https://github.com/orgs/supabase/discussions/28757
+
+  if (build.error) {
+    throw build.error;
+  }
+
+  if (build.data.length !== 1) {
+    throw new Error(
+      `Results contain ${build.data.length} row(s) requires 1 row`
+    );
+  }
+
+  return parseCompactBuild(build.data[0]);
 };
 
 const createNewPageInstances = (): Build["instances"] => {
@@ -185,99 +259,22 @@ export const createBuild = async (
   props: {
     projectId: Build["projectId"];
   },
-  _context: AppContext,
-  client: Prisma.TransactionClient
+  context: AppContext
 ): Promise<void> => {
-  const count = await client.build.count({
-    where: { projectId: props.projectId, deployment: null },
-  });
-
-  if (count > 0) {
-    throw new Error("Dev build already exists");
-  }
-
   const newInstances = createNewPageInstances();
   const [rootInstanceId] = newInstances[0];
-  const systemDataSource: DataSource = {
-    id: nanoid(),
-    scopeInstanceId: rootInstanceId,
-    name: "system",
-    type: "parameter",
-  };
+  const defaultPages = createDefaultPages({ rootInstanceId });
 
-  const defaultPages = Pages.parse(
-    createDefaultPages({
-      rootInstanceId,
-      systemDataSourceId: systemDataSource.id,
-    })
-  );
-
-  await client.build.create({
-    data: {
-      projectId: props.projectId,
-      pages: serializePages(defaultPages),
-      breakpoints: serializeData<Breakpoint>(
-        new Map(createInitialBreakpoints())
-      ),
-      instances: serializeData<Instance>(new Map(newInstances)),
-      dataSources: serializeData<DataSource>(
-        new Map([[systemDataSource.id, systemDataSource]])
-      ),
-    },
+  const newBuild = await context.postgrest.client.from("Build").insert({
+    id: crypto.randomUUID(),
+    projectId: props.projectId,
+    pages: serializePages(defaultPages),
+    breakpoints: serializeData<Breakpoint>(new Map(createInitialBreakpoints())),
+    instances: serializeData<Instance>(new Map(newInstances)),
   });
-};
-
-const zBuildCloneResult = z
-  .array(z.object({ id: z.string() }))
-  .length(1)
-  .transform((result) => result[0]);
-
-export const cloneBuild = async (
-  props: {
-    fromProjectId: Build["projectId"];
-    toProjectId: Build["projectId"];
-    deployment: Deployment | undefined;
-  },
-  _context: AppContext,
-  client: Prisma.TransactionClient
-): Promise<{ id: string }> => {
-  const deployment = props.deployment
-    ? serializeDeployment(props.deployment)
-    : null;
-
-  const notCopiedFields = [
-    "id",
-    "createdAt",
-    "updatedAt",
-    "deployment",
-    "projectId",
-  ];
-  const fieldsToCopy = Object.keys(client.build.fields)
-    .filter((field) => notCopiedFields.includes(field) === false)
-    .map((field) => `"${field}"`)
-    .join(", ");
-
-  const selectQuery = Prisma.sql`
-    SELECT ${Prisma.raw(
-      fieldsToCopy
-    )}, uuid_generate_v4() as id, ${deployment} as deployment, ${
-      props.toProjectId
-    } as "projectId"
-    FROM "Build"
-    WHERE "projectId" = ${props.fromProjectId} AND "deployment" IS NULL`;
-
-  const insertQuery = Prisma.sql`
-    INSERT INTO "Build"(${Prisma.raw(
-      fieldsToCopy
-    )}, "id", "deployment", "projectId")
-    ${selectQuery}
-    RETURNING "id"`;
-
-  const rawResult = await client.$queryRaw(insertQuery);
-
-  const result = zBuildCloneResult.parse(rawResult);
-
-  return result;
+  if (newBuild.error) {
+    throw newBuild.error;
+  }
 };
 
 export const createProductionBuild = async (
@@ -288,7 +285,7 @@ export const createProductionBuild = async (
   context: AppContext
 ) => {
   const canBuild = await authorizeProject.hasProjectPermit(
-    { projectId: props.projectId, permit: "build" },
+    { projectId: props.projectId, permit: "edit" },
     context
   );
 
@@ -296,13 +293,36 @@ export const createProductionBuild = async (
     throw new AuthorizationError("You don't have access to build this project");
   }
 
-  return await cloneBuild(
-    {
-      fromProjectId: props.projectId,
-      toProjectId: props.projectId,
-      deployment: props.deployment,
-    },
-    context,
-    prisma
-  );
+  // Get token permissions
+  if (context.authorization.type === "token") {
+    const permissions = await authDb.getTokenPermissions(
+      {
+        projectId: props.projectId,
+        token: context.authorization.authToken,
+      },
+      context
+    );
+
+    if (!permissions.canPublish) {
+      throw new AuthorizationError(
+        "The token does not have permission to build this project."
+      );
+    }
+  }
+
+  const build = await context.postgrest.client.rpc("create_production_build", {
+    project_id: props.projectId,
+    deployment: JSON.stringify(props.deployment),
+  });
+  const buildId = build.data;
+  if (build.error) {
+    throw build.error;
+  }
+  if (buildId === null) {
+    throw Error(`Project ${props.projectId} not found`);
+  }
+
+  return {
+    id: build.data,
+  };
 };

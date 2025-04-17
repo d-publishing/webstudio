@@ -1,7 +1,6 @@
 import { useId } from "react";
 import { useStore } from "@nanostores/react";
 import { RadioGroup, Radio, RadioAndLabel } from "@webstudio-is/design-system";
-import { humanizeString } from "~/shared/string-utils";
 import {
   BindingControl,
   BindingPopover,
@@ -13,16 +12,16 @@ import {
   $selectedInstanceScope,
   updateExpressionValue,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
+import { PropertyLabel } from "../property-label";
 
 export const RadioControl = ({
   meta,
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: ControlProps<"radio" | "inline-radio">) => {
   const value = computedValue === undefined ? undefined : String(computedValue);
   // making sure that the current value is in the list of options
@@ -32,7 +31,7 @@ export const RadioControl = ({
       : [value, ...meta.options];
 
   const id = useId();
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -43,16 +42,8 @@ export const RadioControl = ({
   return (
     <VerticalLayout
       label={
-        <Label
-          htmlFor={id}
-          description={meta.description}
-          readOnly={overwritable === false}
-        >
-          {label}
-        </Label>
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
       }
-      deletable={deletable}
-      onDelete={onDelete}
     >
       <BindingControl>
         <RadioGroup
@@ -70,7 +61,7 @@ export const RadioControl = ({
           {options.map((value) => (
             <RadioAndLabel key={value}>
               <Radio value={value} id={`${id}:${value}`} />
-              <Label htmlFor={`${id}:${value}`}>{humanizeString(value)}</Label>
+              <Label htmlFor={`${id}:${value}`}>{value}</Label>
             </RadioAndLabel>
           ))}
         </RadioGroup>

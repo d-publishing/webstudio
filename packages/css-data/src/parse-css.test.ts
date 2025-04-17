@@ -1,12 +1,12 @@
-import { describe, expect, test } from "@jest/globals";
-import { parseCss, parseMediaQuery } from "./parse-css";
+import { describe, expect, test } from "vitest";
+import { camelCaseProperty, parseCss, parseMediaQuery } from "./parse-css";
 
 describe("Parse CSS", () => {
   test("longhand property name with keyword value", () => {
     expect(parseCss(`.test { background-color: red }`)).toEqual([
       {
-        selector: "test",
-        property: "backgroundColor",
+        selector: ".test",
+        property: "background-color",
         value: { type: "keyword", value: "red" },
       },
     ]);
@@ -15,9 +15,20 @@ describe("Parse CSS", () => {
   test("one class selector rules", () => {
     expect(parseCss(`.test { color: #ff0000 }`)).toEqual([
       {
-        selector: "test",
+        selector: ".test",
         property: "color",
         value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
+  });
+
+  // @todo this is wrong
+  test.skip("parse declaration with missing value", () => {
+    expect(parseCss(`.test { color:;}`)).toEqual([
+      {
+        selector: ".test",
+        property: "color",
+        value: { type: "guaranteedInvalid" },
       },
     ]);
   });
@@ -30,8 +41,8 @@ describe("Parse CSS", () => {
     `;
     expect(parseCss(css)).toEqual([
       {
-        selector: "test",
-        property: "backgroundImage",
+        selector: ".test",
+        property: "background-image",
         value: {
           type: "layers",
           value: [
@@ -45,8 +56,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundPositionX",
+        selector: ".test",
+        property: "background-position-x",
         value: {
           type: "layers",
           value: [
@@ -56,8 +67,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundPositionY",
+        selector: ".test",
+        property: "background-position-y",
         value: {
           type: "layers",
           value: [
@@ -67,8 +78,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundSize",
+        selector: ".test",
+        property: "background-size",
         value: {
           type: "layers",
           value: [
@@ -90,8 +101,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundRepeat",
+        selector: ".test",
+        property: "background-repeat",
         value: {
           type: "layers",
           value: [
@@ -101,8 +112,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundAttachment",
+        selector: ".test",
+        property: "background-attachment",
         value: {
           type: "layers",
           value: [
@@ -112,8 +123,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundOrigin",
+        selector: ".test",
+        property: "background-origin",
         value: {
           type: "layers",
           value: [
@@ -123,8 +134,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundClip",
+        selector: ".test",
+        property: "background-clip",
         value: {
           type: "layers",
           value: [
@@ -134,8 +145,8 @@ describe("Parse CSS", () => {
         },
       },
       {
-        selector: "test",
-        property: "backgroundColor",
+        selector: ".test",
+        property: "background-color",
         value: { alpha: 1, b: 252, g: 255, r: 235, type: "rgb" },
       },
     ]);
@@ -149,32 +160,32 @@ describe("Parse CSS", () => {
     `;
     expect(parseCss(css)).toEqual([
       {
-        selector: "test",
-        property: "backgroundImage",
+        selector: ".test",
+        property: "background-image",
         value: {
           type: "layers",
           value: [{ type: "keyword", value: "none" }],
         },
       },
       {
-        selector: "test",
-        property: "backgroundPositionX",
+        selector: ".test",
+        property: "background-position-x",
         value: {
           type: "layers",
           value: [{ type: "unit", unit: "px", value: 0 }],
         },
       },
       {
-        selector: "test",
-        property: "backgroundPositionY",
+        selector: ".test",
+        property: "background-position-y",
         value: {
           type: "layers",
           value: [{ type: "unit", unit: "px", value: 0 }],
         },
       },
       {
-        selector: "test",
-        property: "backgroundSize",
+        selector: ".test",
+        property: "background-size",
         value: {
           type: "layers",
           value: [{ type: "keyword", value: "auto" }],
@@ -188,6 +199,28 @@ describe("Parse CSS", () => {
       {
         selector: "a",
         state: ":hover",
+        property: "color",
+        value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
+  });
+
+  test("attribute selector", () => {
+    expect(parseCss(`[class^="a"] { color: #ff0000 }`)).toEqual([
+      {
+        selector: '[class^="a"]',
+        property: "color",
+        value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
+  });
+
+  test("parse first pseudo class as selector", () => {
+    // E.g. :root
+    expect(parseCss(`:first-pseudo:my-state { color: #ff0000 }`)).toEqual([
+      {
+        selector: ":first-pseudo",
+        state: ":my-state",
         property: "color",
         value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
       },
@@ -283,27 +316,27 @@ describe("Parse CSS", () => {
     expect(parseCss(css)).toEqual([
       {
         selector: "h1",
-        property: "marginBottom",
+        property: "margin-bottom",
         value: { type: "unit", unit: "px", value: 10 },
       },
       {
         selector: "h1",
-        property: "fontSize",
+        property: "font-size",
         value: { type: "unit", unit: "px", value: 38 },
       },
       {
         selector: "h1",
-        property: "fontWeight",
+        property: "font-weight",
         value: { type: "keyword", value: "bold" },
       },
       {
         selector: "h1",
-        property: "marginTop",
+        property: "margin-top",
         value: { type: "unit", unit: "px", value: 20 },
       },
       {
         selector: "h1",
-        property: "lineHeight",
+        property: "line-height",
         value: { type: "unit", unit: "px", value: 44 },
       },
     ]);
@@ -313,62 +346,62 @@ describe("Parse CSS", () => {
     expect(parseCss(`a { border: 1px solid red }`)).toEqual([
       {
         selector: "a",
-        property: "borderTopWidth",
+        property: "border-top-width",
         value: { type: "unit", unit: "px", value: 1 },
       },
       {
         selector: "a",
-        property: "borderRightWidth",
+        property: "border-right-width",
         value: { type: "unit", unit: "px", value: 1 },
       },
       {
         selector: "a",
-        property: "borderBottomWidth",
+        property: "border-bottom-width",
         value: { type: "unit", unit: "px", value: 1 },
       },
       {
         selector: "a",
-        property: "borderLeftWidth",
+        property: "border-left-width",
         value: { type: "unit", unit: "px", value: 1 },
       },
       {
         selector: "a",
-        property: "borderTopStyle",
+        property: "border-top-style",
         value: { type: "keyword", value: "solid" },
       },
       {
         selector: "a",
-        property: "borderRightStyle",
+        property: "border-right-style",
         value: { type: "keyword", value: "solid" },
       },
       {
         selector: "a",
-        property: "borderBottomStyle",
+        property: "border-bottom-style",
         value: { type: "keyword", value: "solid" },
       },
       {
         selector: "a",
-        property: "borderLeftStyle",
+        property: "border-left-style",
         value: { type: "keyword", value: "solid" },
       },
       {
         selector: "a",
-        property: "borderTopColor",
+        property: "border-top-color",
         value: { type: "keyword", value: "red" },
       },
       {
         selector: "a",
-        property: "borderRightColor",
+        property: "border-right-color",
         value: { type: "keyword", value: "red" },
       },
       {
         selector: "a",
-        property: "borderBottomColor",
+        property: "border-bottom-color",
         value: { type: "keyword", value: "red" },
       },
       {
         selector: "a",
-        property: "borderLeftColor",
+        property: "border-left-color",
         value: { type: "keyword", value: "red" },
       },
     ]);
@@ -384,18 +417,7 @@ describe("Parse CSS", () => {
     ]);
   });
 
-  // @todo https://github.com/webstudio-is/webstudio/issues/3399
-  test("parse variable as unset default", () => {
-    expect(parseCss(`a { color: var(--color) }`)).toEqual([
-      {
-        selector: "a",
-        property: "color",
-        value: { type: "keyword", value: "unset" },
-      },
-    ]);
-  });
-
-  test("optionally parse variable as var value", () => {
+  test("parse variable as var value", () => {
     expect(
       parseCss(
         `
@@ -403,22 +425,21 @@ describe("Parse CSS", () => {
           color: var(--color);
           background-color: var(--color, red);
         }
-        `,
-        { customProperties: true }
+        `
       )
     ).toEqual([
       {
         selector: "a",
         property: "color",
-        value: { type: "var", value: "color", fallbacks: [] },
+        value: { type: "var", value: "color" },
       },
       {
         selector: "a",
-        property: "backgroundColor",
+        property: "background-color",
         value: {
           type: "var",
           value: "color",
-          fallbacks: [{ type: "unparsed", value: "red" }],
+          fallback: { type: "unparsed", value: "red" },
         },
       },
     ]);
@@ -433,7 +454,7 @@ describe("Parse CSS", () => {
       },
       {
         selector: "a",
-        property: "backgroundColor",
+        property: "background-color",
         value: { type: "keyword", value: "red" },
       },
     ]);
@@ -460,11 +481,33 @@ describe("Parse CSS", () => {
   });
 
   test("parse child combinator", () => {
-    expect(parseCss(`a > b { color: #ff0000 }`)).toEqual([]);
+    expect(parseCss(`a > b { color: #ff0000 }`)).toEqual([
+      {
+        selector: "a > b",
+        property: "color",
+        value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
   });
 
   test("parse space combinator", () => {
-    expect(parseCss(`a b { color: #ff0000 }`)).toEqual([]);
+    expect(parseCss(`.a b { color: #ff0000 }`)).toEqual([
+      {
+        selector: ".a b",
+        property: "color",
+        value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
+  });
+
+  test("parse nested selectors as one token", () => {
+    expect(parseCss(`a b c.d { color: #ff0000 }`)).toEqual([
+      {
+        selector: "a b c.d",
+        property: "color",
+        value: { alpha: 1, b: 0, g: 0, r: 255, type: "rgb" },
+      },
+    ]);
   });
 });
 
@@ -484,17 +527,17 @@ test("parse font-smooth properties", () => {
   ).toEqual([
     {
       selector: "a",
-      property: "WebkitFontSmoothing",
+      property: "-webkit-font-smoothing",
       value: { type: "keyword", value: "auto" },
     },
     {
       selector: "b",
-      property: "WebkitFontSmoothing",
+      property: "-webkit-font-smoothing",
       value: { type: "keyword", value: "auto" },
     },
     {
       selector: "c",
-      property: "MozOsxFontSmoothing",
+      property: "-moz-osx-font-smoothing",
       value: { type: "keyword", value: "auto" },
     },
   ]);
@@ -682,6 +725,40 @@ test("ignore unsupported at rules", () => {
   ]);
 });
 
+test("parse &:pseudo-classes as state", () => {
+  expect(
+    parseCss(`
+      &:hover {
+        color: red;
+      }
+   `)
+  ).toEqual([
+    {
+      selector: "",
+      state: ":hover",
+      property: "color",
+      value: { type: "keyword", value: "red" },
+    },
+  ]);
+});
+
+test("parse &[attribute=selector] as state", () => {
+  expect(
+    parseCss(`
+      &[data-state=active] {
+        color: red;
+      }
+   `)
+  ).toEqual([
+    {
+      selector: "",
+      state: "[data-state=active]",
+      property: "color",
+      value: { type: "keyword", value: "red" },
+    },
+  ]);
+});
+
 test("parse media query", () => {
   expect(parseMediaQuery(`(min-width: 768px)`)).toEqual({
     minWidth: 768,
@@ -690,4 +767,26 @@ test("parse media query", () => {
     maxWidth: 768,
   });
   expect(parseMediaQuery(`(hover: hover)`)).toEqual(undefined);
+});
+
+test("camel case css property", () => {
+  expect(camelCaseProperty("margin-top")).toEqual("marginTop");
+  expect(camelCaseProperty("-webkit-font-smoothing")).toEqual(
+    "WebkitFontSmoothing"
+  );
+  expect(camelCaseProperty("-moz-osx-font-smoothing")).toEqual(
+    "MozOsxFontSmoothing"
+  );
+});
+
+test("camel case css property multiple times", () => {
+  expect(camelCaseProperty(camelCaseProperty("margin-top"))).toEqual(
+    "marginTop"
+  );
+  expect(
+    camelCaseProperty(camelCaseProperty("-webkit-font-smoothing"))
+  ).toEqual("WebkitFontSmoothing");
+  expect(
+    camelCaseProperty(camelCaseProperty("-moz-osx-font-smoothing"))
+  ).toEqual("MozOsxFontSmoothing");
 });

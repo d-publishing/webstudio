@@ -20,17 +20,14 @@ import {
 import {
   type Hook,
   getClosestInstance,
-  getInstanceSelectorById,
   ReactSdkContext,
-} from "@webstudio-is/react-sdk";
+} from "@webstudio-is/react-sdk/runtime";
 
-// wrap in forwardRef because Root is functional component without ref
-export const Select = forwardRef<
-  HTMLDivElement,
-  ComponentPropsWithoutRef<typeof Root>
->((props, _ref) => {
-  return <Root {...props} />;
-});
+export const Select = forwardRef<HTMLDivElement, ComponentProps<typeof Root>>(
+  ({ value, defaultValue, ...props }, _ref) => {
+    return <Root {...props} defaultValue={value ?? defaultValue} />;
+  }
+);
 
 export const SelectTrigger = forwardRef<
   HTMLButtonElement,
@@ -101,11 +98,7 @@ export const hooksSelect: Hook = {
           `${namespace}:Select`
         );
         if (select) {
-          const instanceSelector = getInstanceSelectorById(
-            event.instanceSelector,
-            select.id
-          );
-          context.setMemoryProp(instanceSelector, "open", undefined);
+          context.setMemoryProp(select, "open", undefined);
         }
       }
     }
@@ -119,11 +112,7 @@ export const hooksSelect: Hook = {
           `${namespace}:Select`
         );
         if (select) {
-          const instanceSelector = getInstanceSelectorById(
-            event.instanceSelector,
-            select.id
-          );
-          context.setMemoryProp(instanceSelector, "open", true);
+          context.setMemoryProp(select, "open", true);
         }
       }
     }

@@ -1,6 +1,6 @@
+import { useId } from "react";
 import { useStore } from "@nanostores/react";
-import { Checkbox, CheckboxAndLabel, useId } from "@webstudio-is/design-system";
-import { humanizeString } from "~/shared/string-utils";
+import { Checkbox, CheckboxAndLabel } from "@webstudio-is/design-system";
 import {
   BindingControl,
   BindingPopover,
@@ -12,7 +12,9 @@ import {
   $selectedInstanceScope,
   updateExpressionValue,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
+import { PropertyLabel } from "../property-label";
 
 const add = (array: string[], item: string) => {
   if (array.includes(item)) {
@@ -33,9 +35,7 @@ export const CheckControl = ({
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: ControlProps<"check" | "inline-check" | "multi-select">) => {
   const value = Array.isArray(computedValue)
     ? computedValue.map((item) => String(item))
@@ -45,7 +45,7 @@ export const CheckControl = ({
   const options = Array.from(new Set([...meta.options, ...value]));
 
   const id = useId();
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -56,16 +56,8 @@ export const CheckControl = ({
   return (
     <VerticalLayout
       label={
-        <Label
-          htmlFor={`${id}:${options[0]}`}
-          description={meta.description}
-          readOnly={overwritable === false}
-        >
-          {label}
-        </Label>
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
       }
-      deletable={deletable}
-      onDelete={onDelete}
     >
       <BindingControl>
         {options.map((option) => (
@@ -85,7 +77,7 @@ export const CheckControl = ({
               }}
               id={`${id}:${option}`}
             />
-            <Label htmlFor={`${id}:${option}`}>{humanizeString(option)}</Label>
+            <Label htmlFor={`${id}:${option}`}>{option}</Label>
           </CheckboxAndLabel>
         ))}
         <BindingPopover

@@ -1,10 +1,17 @@
 import type { LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { db } from "@webstudio-is/project/index.server";
-import { loadBuildByProjectId } from "@webstudio-is/project-build/index.server";
+import { loadDevBuildByProjectId } from "@webstudio-is/project-build/index.server";
 import { loadAssetsByProject } from "@webstudio-is/asset-uploader/index.server";
 import { createContext } from "~/shared/context.server";
+import { preventCrossOriginCookie } from "~/services/no-cross-origin-cookie";
+import { checkCsrf } from "~/services/csrf-session.server";
+import { allowedDestinations } from "~/services/destinations.server";
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+  preventCrossOriginCookie(request);
+  allowedDestinations(request, ["document", "empty"]);
+  await checkCsrf(request);
+
   if (params.projectId === undefined) {
     throw new Error("Project id undefined");
   }
@@ -16,10 +23,10 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   if (project.userId === null) {
     throw new Error("Project must have project userId defined");
   }
-  const devBuild = await loadBuildByProjectId(project.id);
+  const build = await loadDevBuildByProjectId(context, project.id);
   const assets = await loadAssetsByProject(project.id, context);
   return {
-    build: devBuild,
+    ...build,
     assets,
   };
 };

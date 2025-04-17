@@ -1,64 +1,4 @@
 import { createStitches } from "@stitches/react";
-import {
-  amber,
-  amberA,
-  blackA,
-  blue,
-  blueA,
-  bronze,
-  bronzeA,
-  brown,
-  brownA,
-  crimson,
-  crimsonA,
-  cyan,
-  cyanA,
-  gold,
-  goldA,
-  grass,
-  grassA,
-  gray,
-  grayA,
-  green,
-  greenA,
-  indigo,
-  indigoA,
-  lime,
-  limeA,
-  mauve,
-  mauveA,
-  mint,
-  mintA,
-  olive,
-  oliveA,
-  orange,
-  orangeA,
-  pink,
-  pinkA,
-  plum,
-  plumA,
-  purple,
-  purpleA,
-  red,
-  redA,
-  sage,
-  sageA,
-  sand,
-  sandA,
-  sky,
-  skyA,
-  slate,
-  slateA,
-  teal,
-  tealA,
-  tomato,
-  tomatoA,
-  violet,
-  violetA,
-  whiteA,
-  yellow,
-  yellowA,
-} from "@radix-ui/colors";
 import type * as Stitches from "@stitches/react";
 export type { VariantProps } from "@stitches/react";
 import * as figma from "./__generated__/figma-design-tokens";
@@ -100,91 +40,12 @@ const spacing = {
   33: "320px",
   34: "384px",
   35: "448px",
-} as const;
+};
 
 const { styled, css, getCssText, globalCss, keyframes, config, reset } =
   createStitches({
     theme: {
-      colors: {
-        ...gray,
-        ...mauve,
-        ...slate,
-        ...sage,
-        ...olive,
-        ...sand,
-        ...tomato,
-        ...red,
-        ...crimson,
-        ...pink,
-        ...plum,
-        ...purple,
-        ...violet,
-        ...indigo,
-        ...blue,
-        ...sky,
-        ...mint,
-        ...cyan,
-        ...teal,
-        ...green,
-        ...grass,
-        ...lime,
-        ...yellow,
-        ...amber,
-        ...orange,
-        ...brown,
-        ...bronze,
-        ...gold,
-
-        ...grayA,
-        ...mauveA,
-        ...slateA,
-        ...sageA,
-        ...oliveA,
-        ...sandA,
-        ...tomatoA,
-        ...redA,
-        ...crimsonA,
-        ...pinkA,
-        ...plumA,
-        ...purpleA,
-        ...violetA,
-        ...indigoA,
-        ...blueA,
-        ...skyA,
-        ...mintA,
-        ...cyanA,
-        ...tealA,
-        ...greenA,
-        ...grassA,
-        ...limeA,
-        ...yellowA,
-        ...amberA,
-        ...orangeA,
-        ...brownA,
-        ...bronzeA,
-        ...goldA,
-
-        ...whiteA,
-        ...blackA,
-
-        // Semantic colors
-        hiContrast: "$slate12",
-        loContrast: "$slate1",
-        hint: "$slate9",
-        muted: "$slate6",
-        primary: "$blue10",
-        canvas: "hsl(0 0% 93%)",
-        panel: "white",
-        panelOutline: "hsl(0deg 0% 0% / 10%)",
-        transparentPanel: "hsl(0 0% 0% / 97%)",
-        shadowLight: "hsl(206 22% 7% / 35%)",
-        shadowDark: "hsl(206 22% 7% / 20%)",
-        background: "$slate1",
-        text: "$slate12",
-        transparentExtreme: "transparent",
-
-        ...figma.color,
-      },
+      colors: figma.color,
       fonts: {
         ...figma.fontFamilies,
         sans: figma.fontFamilies.inter,
@@ -195,7 +56,10 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
         1: "0.4",
       },
       spacing,
-
+      sizes: {
+        sidebarWidth: spacing[30],
+        controlHeight: spacing[11],
+      },
       /**
        * Use instead: textVariants / textStyles / <Text />
        */
@@ -224,10 +88,6 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
         pill: "9999px",
       },
       zIndices: {
-        1: "100",
-        2: "200",
-        3: "300",
-        4: "400",
         max: "999",
       },
       easing: {
@@ -235,15 +95,17 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
         easeOut: "cubic-bezier(0.16, 1, 0.3, 1)",
       },
       shadows: figma.boxShadow,
+
+      // Semantic values
+      panel: {
+        padding: `${spacing[5]} ${spacing[7]}`,
+        paddingInline: spacing[7],
+        paddingBlock: spacing[5],
+      },
     },
     media: {
       tablet: "(min-width: 768px)",
-      laptop: "(min-width: 1024px)",
-      desktop: "(min-width: 1280px)",
-      motion: "(prefers-reduced-motion)",
       hover: "(any-hover: hover)",
-      dark: "(prefers-color-scheme: dark)",
-      light: "(prefers-color-scheme: light)",
     },
     utils: {
       p: (value: Stitches.PropertyValue<"padding">) => ({
@@ -262,12 +124,10 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
         paddingLeft: value,
       }),
       px: (value: Stitches.PropertyValue<"paddingLeft">) => ({
-        paddingLeft: value,
-        paddingRight: value,
+        paddingInline: value,
       }),
       py: (value: Stitches.PropertyValue<"paddingTop">) => ({
-        paddingTop: value,
-        paddingBottom: value,
+        paddingBlock: value,
       }),
 
       m: (value: Stitches.PropertyValue<"margin">) => ({
@@ -286,12 +146,10 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
         marginLeft: value,
       }),
       mx: (value: Stitches.PropertyValue<"marginLeft">) => ({
-        marginLeft: value,
-        marginRight: value,
+        marginInline: value,
       }),
       my: (value: Stitches.PropertyValue<"marginTop">) => ({
-        marginTop: value,
-        marginBottom: value,
+        marginBlock: value,
       }),
 
       userSelect: (value: Stitches.PropertyValue<"userSelect">) => ({
@@ -311,15 +169,6 @@ const { styled, css, getCssText, globalCss, keyframes, config, reset } =
       backgroundClip: (value: Stitches.PropertyValue<"backgroundClip">) => ({
         WebkitBackgroundClip: value,
         backgroundClip: value,
-      }),
-
-      // LEGACY, please don't use them
-      as: (value: Stitches.PropertyValue<"alignSelf">) => ({
-        alignSelf: value,
-      }),
-      fg: (value: Stitches.PropertyValue<"flexGrow">) => ({ flexGrow: value }),
-      bc: (value: Stitches.PropertyValue<"backgroundColor">) => ({
-        backgroundColor: value,
       }),
     },
   });

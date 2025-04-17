@@ -1,5 +1,6 @@
-import type { Asset, WebstudioData } from "@webstudio-is/sdk";
-import type { Build, MarketplaceProduct } from "@webstudio-is/project-build";
+import { getStyleDeclKey, type WebstudioData } from "@webstudio-is/sdk";
+import type { MarketplaceProduct } from "@webstudio-is/project-build";
+import type { loader } from "~/routes/rest.data.$projectId";
 import {
   $assets,
   $breakpoints,
@@ -13,6 +14,7 @@ import {
   $styleSources,
   $styles,
 } from "./nano-states";
+import { fetch } from "~/shared/fetch.client";
 
 export type BuilderData = WebstudioData & {
   marketplaceProduct: undefined | MarketplaceProduct;
@@ -38,20 +40,8 @@ export const getBuilderData = (): BuilderData => {
   };
 };
 
-export const setBuilderData = (data: BuilderData) => {
-  $assets.set(data.assets);
-  $instances.set(data.instances);
-  $dataSources.set(data.dataSources);
-  $resources.set(data.resources);
-  // props should be after data sources to compute logic
-  $props.set(data.props);
-  $pages.set(data.pages);
-  $styleSources.set(data.styleSources);
-  $styleSourceSelections.set(data.styleSourceSelections);
-  $breakpoints.set(data.breakpoints);
-  $styles.set(data.styles);
-  $marketplaceProduct.set(data.marketplaceProduct);
-};
+const getPair = <Item extends { id: string }>(item: Item) =>
+  [item.id, item] as const;
 
 export const loadBuilderData = async ({
   projectId,
@@ -61,33 +51,38 @@ export const loadBuilderData = async ({
   signal: AbortSignal;
 }) => {
   const currentUrl = new URL(location.href);
-  const authToken = currentUrl.searchParams.get("authToken");
   const url = new URL(`/rest/data/${projectId}`, currentUrl.origin);
-  if (authToken) {
-    url.searchParams.set("authToken", authToken);
-  }
-  const response = await fetch(url, { signal });
+  const headers = new Headers();
+  const response = await fetch(url, { headers, signal });
+
   if (response.ok) {
-    const data = (await response.json()) as {
-      assets: Asset[];
-      build: Build;
-      marketplaceProduct: undefined | MarketplaceProduct;
-    };
-    const { assets, build } = data;
+    const data: Awaited<ReturnType<typeof loader>> = await response.json();
     return {
-      version: build.version,
-      assets: new Map(assets.map((asset) => [asset.id, asset])),
-      instances: new Map(build.instances),
-      dataSources: new Map(build.dataSources),
-      resources: new Map(build.resources),
-      props: new Map(build.props),
-      pages: build.pages,
-      styleSources: new Map(build.styleSources),
-      styleSourceSelections: new Map(build.styleSourceSelections),
-      breakpoints: new Map(build.breakpoints),
-      styles: new Map(build.styles),
-      marketplaceProduct: build.marketplaceProduct,
+      version: data.version,
+      assets: new Map(data.assets.map(getPair)),
+      instances: new Map(data.instances.map(getPair)),
+      dataSources: new Map(data.dataSources.map(getPair)),
+      resources: new Map(data.resources.map(getPair)),
+      props: new Map(data.props.map(getPair)),
+      pages: data.pages,
+      breakpoints: new Map(data.breakpoints.map(getPair)),
+      styleSources: new Map(data.styleSources.map(getPair)),
+      styleSourceSelections: new Map(
+        data.styleSourceSelections.map((item) => [item.instanceId, item])
+      ),
+      styles: new Map(data.styles.map((item) => [getStyleDeclKey(item), item])),
+      marketplaceProduct: data.marketplaceProduct,
     } satisfies BuilderData & { version: number };
   }
-  throw Error("Unable to load builder data");
+
+  const text = await response.text();
+
+  // No toasts available in this context
+  alert(
+    `Unable to load builder data. Response status: ${response.status}. Response text: ${text}`
+  );
+
+  throw Error(
+    `Unable to load builder data. Response status: ${response.status}. Response text: ${text}`
+  );
 };

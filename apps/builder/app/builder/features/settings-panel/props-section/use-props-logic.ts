@@ -1,14 +1,11 @@
 import { nanoid } from "nanoid";
-import type { Instance, Prop } from "@webstudio-is/sdk";
-import {
-  type PropMeta,
-  showAttribute,
-  textContentAttribute,
-  collectionComponent,
-} from "@webstudio-is/react-sdk";
-import type { PropValue } from "../shared";
 import { useStore } from "@nanostores/react";
+import type { PropMeta, Instance, Prop } from "@webstudio-is/sdk";
+import { collectionComponent, descendantComponent } from "@webstudio-is/sdk";
+import { showAttribute, textContentAttribute } from "@webstudio-is/react-sdk";
+import { showAttributeMeta, type PropValue } from "../shared";
 import {
+  $isContentMode,
   $registeredComponentMetas,
   $registeredComponentPropsMetas,
 } from "~/shared/nano-states";
@@ -19,7 +16,6 @@ export type PropAndMeta = {
   propName: string;
   meta: PropMeta;
 };
-export type NameAndLabel = { name: string; label?: string };
 
 // The value we set prop to when it's added
 //
@@ -96,6 +92,13 @@ const getDefaultMetaForType = (type: Prop["type"]): PropMeta => {
       throw new Error(
         "A prop with type string[] must have a meta, we can't provide a default one because we need a list of options"
       );
+
+    case "animationAction":
+      return {
+        type: "animationAction",
+        control: "animationAction",
+        required: false,
+      };
     case "json":
       throw new Error(
         "A prop with type json must have a meta, we can't provide a default one because we need a list of options"
@@ -108,6 +111,10 @@ const getDefaultMetaForType = (type: Prop["type"]): PropMeta => {
       throw new Error(
         "A prop with type parameter must have a meta, we can't provide a default one because we need a list of options"
       );
+    case "resource":
+      throw new Error(
+        "A prop with type resource must have a meta, we can't provide a default one because we need a list of options"
+      );
     default:
       throw new Error(`Usupported data type: ${type satisfies never}`);
   }
@@ -117,7 +124,6 @@ type UsePropsLogicInput = {
   instance: Instance;
   props: Prop[];
   updateProp: (update: Prop) => void;
-  deleteProp: (id: Prop["id"]) => void;
 };
 
 const getAndDelete = <Value>(map: Map<string, Value>, key: string) => {
@@ -126,28 +132,34 @@ const getAndDelete = <Value>(map: Map<string, Value>, key: string) => {
   return value;
 };
 
-const systemPropsMeta: { name: string; meta: PropMeta }[] = [
-  {
-    name: showAttribute,
-    meta: {
-      label: "Show",
-      required: false,
-      control: "boolean",
-      type: "boolean",
-      defaultValue: true,
-      description:
-        "Removes the instance from the DOM. Breakpoints have no effect on this setting.",
-    },
-  },
-];
-
 /** usePropsLogic expects that key={instanceId} is used on the ancestor component */
 export const usePropsLogic = ({
   instance,
   props,
   updateProp,
-  deleteProp,
 }: UsePropsLogicInput) => {
+  const isContentMode = useStore($isContentMode);
+
+  /**
+   * In content edit mode we show only Image and Link props
+   * In the future I hope the only thing we will show will be Components
+   */
+  const isPropVisible = (propName: string) => {
+    const contentModeWhiteList: Partial<Record<string, string[]>> = {
+      Image: ["src", "width", "height", "alt"],
+      Link: ["href"],
+      RichTextLink: ["href"],
+    };
+
+    if (!isContentMode) {
+      return true;
+    }
+
+    const propsWhiteList = contentModeWhiteList[instance.component] ?? [];
+
+    return propsWhiteList.includes(propName);
+  };
+
   const instanceMeta = useStore($registeredComponentMetas).get(
     instance.component
   );
@@ -168,22 +180,22 @@ export const usePropsLogic = ({
 
   const initialPropsNames = new Set(meta.initialProps ?? []);
 
-  const systemProps: PropAndMeta[] = systemPropsMeta.map(({ name, meta }) => {
-    let saved = getAndDelete<Prop>(unprocessedSaved, name);
-    if (saved === undefined && meta.defaultValue !== undefined) {
-      saved = getStartingProp(instance.id, meta, name);
-    }
-    getAndDelete(unprocessedKnown, name);
-    initialPropsNames.delete(name);
-    return {
-      prop: saved,
-      propName: name,
-      meta,
-    };
-  });
+  const systemProps: PropAndMeta[] = [];
+  // descendant component is not actually rendered
+  // but affects styling of nested elements
+  // hiding descendant does not hide nested elements and confuse users
+  if (instance.component !== descendantComponent) {
+    systemProps.push({
+      propName: showAttribute,
+      prop: getAndDelete(unprocessedSaved, showAttribute),
+      meta: showAttributeMeta,
+    });
+  }
+
   const canHaveTextContent =
     instanceMeta?.type === "container" &&
     instance.component !== collectionComponent;
+
   const hasNoChildren = instance.children.length === 0;
   const hasOnlyTextChild =
     instance.children.length === 1 && instance.children[0].type === "text";
@@ -287,36 +299,24 @@ export const usePropsLogic = ({
     );
   };
 
-  const handleDeleteByPropName = (propName: string) => {
-    const prop = props.find((prop) => prop.name === propName);
-
-    if (prop) {
-      deleteProp(prop.id);
-    }
-  };
-
-  const handleDelete = (prop: Prop) => {
-    deleteProp(prop.id);
-  };
-
   return {
     handleAdd,
     handleChange,
-    handleDelete,
     handleChangeByPropName,
-    handleDeleteByPropName,
     meta,
     /** Similar to Initial, but displayed as a separate group in UI etc.
      * Currentrly used only for the ID prop. */
-    systemProps,
+    systemProps: systemProps.filter(({ propName }) => isPropVisible(propName)),
     /** Initial (not deletable) props */
-    initialProps,
+    initialProps: initialProps.filter(({ propName }) =>
+      isPropVisible(propName)
+    ),
     /** Optional props that were added by user */
-    addedProps,
+    addedProps: addedProps.filter(({ propName }) => isPropVisible(propName)),
     /** List of remaining props still available to add */
     availableProps: Array.from(
       unprocessedKnown.entries(),
-      ([name, { label }]) => ({ name, label })
+      ([name, { label, description }]) => ({ name, label, description })
     ),
   };
 };

@@ -1,92 +1,64 @@
-import type { StyleProperty } from "@webstudio-is/css-engine";
+import {
+  camelCaseProperty,
+  propertyDescriptions,
+} from "@webstudio-is/css-data";
+import type { CssProperty } from "@webstudio-is/css-engine";
 import {
   Flex,
   Grid,
   IconButton,
   Separator,
   styled,
+  FloatingPanel,
+  theme,
 } from "@webstudio-is/design-system";
-import { styleConfigByName } from "../../shared/configs";
-import type { SectionProps } from "../shared/section";
-import { PropertyName } from "../../shared/property-name";
+import { PositionControl, SelectControl, TextControl } from "../../controls";
 import {
-  PositionControl,
-  SelectControl,
-  TextControl,
-  type ControlProps,
-} from "../../controls";
-import {
-  EyeconOpenIcon,
-  EyeconClosedIcon,
+  EyeOpenIcon,
+  EyeClosedIcon,
   ScrollIcon,
   AutoScrollIcon,
   EllipsesIcon,
 } from "@webstudio-is/icons";
-import { CollapsibleSection } from "../../shared/collapsible-section";
-import { theme } from "@webstudio-is/design-system";
+import { StyleSection } from "../../shared/style-section";
 import { ToggleGroupControl } from "../../controls/toggle-group/toggle-group-control";
-import { getStyleSourceColor } from "../../shared/style-info";
-import { FloatingPanel } from "~/builder/shared/floating-panel";
+import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../../property-label";
+import { useComputedStyleDecl } from "../../shared/model";
+import { deleteProperty } from "../../shared/use-style-data";
 
-const SizeProperty = ({
-  property,
-  currentStyle,
-  setProperty,
-  deleteProperty,
-}: ControlProps) => {
-  const { label } = styleConfigByName(property);
+const SizeProperty = ({ property }: { property: CssProperty }) => {
   return (
     <Grid gap={1}>
-      <PropertyName
-        label={label}
+      <PropertyLabel
+        label={humanizeString(property)}
+        description={propertyDescriptions[camelCaseProperty(property)]}
         properties={[property]}
-        style={currentStyle}
-        onReset={() => deleteProperty(property)}
       />
-      <TextControl
-        property={property}
-        currentStyle={currentStyle}
-        setProperty={setProperty}
-        deleteProperty={deleteProperty}
-      />
+      <TextControl property={property} />
     </Grid>
   );
 };
 
-const ObjectPosition = ({
-  property,
-  currentStyle,
-  setProperty,
-  deleteProperty,
-  isAdvanced,
-}: ControlProps) => {
-  const styleSourceColor = getStyleSourceColor({
-    properties: [property],
-    currentStyle,
-  });
-
+const ObjectPosition = () => {
+  const styleDecl = useComputedStyleDecl("object-position");
   return (
     <Flex justify="end">
       <FloatingPanel
         title="Object Position"
+        placement="bottom"
         content={
-          <Flex css={{ px: theme.spacing[9], py: theme.spacing[5] }}>
-            <PositionControl
-              property={property}
-              currentStyle={currentStyle}
-              setProperty={setProperty}
-              deleteProperty={deleteProperty}
-              isAdvanced={isAdvanced}
-            />
+          <Flex css={{ padding: theme.panel.padding }}>
+            <PositionControl property="object-position" styleDecl={styleDecl} />
           </Flex>
         }
       >
         <IconButton
-          variant={styleSourceColor}
+          variant={styleDecl.source.name}
           onClick={(event) => {
             if (event.altKey) {
               event.preventDefault();
-              deleteProperty(property);
+              deleteProperty("object-position");
             }
           }}
         >
@@ -100,175 +72,91 @@ const ObjectPosition = ({
 export const properties = [
   "width",
   "height",
-  "minWidth",
-  "minHeight",
-  "maxWidth",
-  "maxHeight",
-  "overflowX",
-  "overflowY",
-  "objectFit",
-  "objectPosition",
-  "aspectRatio",
-] satisfies Array<StyleProperty>;
+  "min-width",
+  "min-height",
+  "max-width",
+  "max-height",
+  "overflow-x",
+  "overflow-y",
+  "object-fit",
+  "object-position",
+  "aspect-ratio",
+] satisfies Array<CssProperty>;
 
 const SectionLayout = styled(Grid, {
   columnGap: theme.spacing[5],
   rowGap: theme.spacing[5],
-  px: theme.spacing[9],
+  paddingInline: theme.panel.paddingInline,
 });
 
-export const Section = ({
-  currentStyle,
-  setProperty,
-  deleteProperty,
-  createBatchUpdate,
-}: SectionProps) => {
+export const Section = () => {
   return (
-    <CollapsibleSection
-      label="Size"
-      currentStyle={currentStyle}
-      properties={properties}
-      fullWidth
-    >
+    <StyleSection label="Size" properties={properties} fullWidth>
       <SectionLayout columns={2}>
-        <SizeProperty
-          property="width"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
+        <SizeProperty property="width" />
+        <SizeProperty property="height" />
+        <SizeProperty property="min-width" />
+        <SizeProperty property="min-height" />
+        <SizeProperty property="max-width" />
+        <SizeProperty property="max-height" />
+        <PropertyLabel
+          label="Aspect Ratio"
+          description={propertyDescriptions.aspectRatio}
+          properties={["aspect-ratio"]}
         />
-        <SizeProperty
-          property="height"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
-        <SizeProperty
-          property="minWidth"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
-        <SizeProperty
-          property="minHeight"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
-        <SizeProperty
-          property="maxWidth"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
-        <SizeProperty
-          property="maxHeight"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
-        <PropertyName
-          label={styleConfigByName("aspectRatio").label}
-          properties={["aspectRatio"]}
-          style={currentStyle}
-          onReset={() => deleteProperty("aspectRatio")}
-        />
-        <TextControl
-          property={"aspectRatio"}
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
+        <TextControl property="aspect-ratio" />
       </SectionLayout>
       <Separator />
       <SectionLayout columns={2}>
-        <PropertyName
+        <PropertyLabel
           label="Overflow"
-          properties={["overflowX", "overflowY"]}
-          style={currentStyle}
-          onReset={() => {
-            const batch = createBatchUpdate();
-            deleteProperty("overflowX");
-            deleteProperty("overflowY");
-            batch.publish();
-          }}
+          description={propertyDescriptions.overflow}
+          properties={["overflow-x", "overflow-y"]}
         />
         <ToggleGroupControl
-          property="overflowX"
-          currentStyle={currentStyle}
-          setProperty={() => (value) => {
-            const batch = createBatchUpdate();
-            batch.setProperty("overflowX")(value);
-            batch.setProperty("overflowY")(value);
-            batch.publish();
-          }}
-          deleteProperty={() => {
-            const batch = createBatchUpdate();
-            batch.deleteProperty("overflowX");
-            batch.deleteProperty("overflowY");
-            batch.publish();
-          }}
+          label="Overflow"
+          properties={["overflow-x", "overflow-y"]}
           items={[
             {
-              child: <EyeconOpenIcon />,
-              title: "Overflow",
+              child: <EyeOpenIcon />,
               description:
                 "Content is fully visible and extends beyond the container if it exceeds its size.",
               value: "visible",
-              propertyValues: "overflow-x: visible;\noverflow-y: visible;",
             },
             {
-              child: <EyeconClosedIcon />,
-              title: "Overflow",
+              child: <EyeClosedIcon />,
               description:
                 "Content that exceeds the container's size is clipped and hidden without scrollbars.",
               value: "hidden",
-              propertyValues: "overflow-x: hidden;\noverflow-y: hidden;",
             },
             {
               child: <ScrollIcon />,
-              title: "Overflow",
               description:
                 "Scrollbars are added to the container, allowing users to scroll and view the exceeding content.",
               value: "scroll",
-              propertyValues: "overflow-x: scroll;\noverflow-y: scroll;",
             },
 
             {
               child: <AutoScrollIcon />,
-              title: "Overflow",
               description:
                 "Scrollbars are added to the container only when necessary, based on the content size.",
               value: "auto",
-              propertyValues: "overflow-x: auto;\noverflow-y: auto;",
             },
           ]}
         />
-        <PropertyName
-          label={styleConfigByName("objectFit").label}
-          properties={["objectFit"]}
-          style={currentStyle}
-          onReset={() => deleteProperty("objectFit")}
+        <PropertyLabel
+          label="Object Fit"
+          description={propertyDescriptions.objectFit}
+          properties={["object-fit"]}
         />
-        <SelectControl
-          property="objectFit"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
+        <SelectControl property="object-fit" />
+        <PropertyLabel
+          label="Object Position"
+          description={propertyDescriptions.objectPosition}
+          properties={["object-position"]}
         />
-        <PropertyName
-          label={styleConfigByName("objectPosition").label}
-          properties={["objectPosition"]}
-          style={currentStyle}
-          onReset={() => deleteProperty("objectPosition")}
-        />
-        <ObjectPosition
-          property="objectPosition"
-          currentStyle={currentStyle}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-        />
+        <ObjectPosition />
       </SectionLayout>
-    </CollapsibleSection>
+    </StyleSection>
   );
 };

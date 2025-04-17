@@ -1,4 +1,4 @@
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import { __testing__ } from "./plugin-markdown";
 import { $breakpoints } from "../nano-states";
 
@@ -65,18 +65,11 @@ describe("Plugin Markdown", () => {
       ],
       "component": "Heading",
       "id": "123",
+      "tag": "h1",
       "type": "instance",
     },
   ],
-  "props": [
-    {
-      "id": "123",
-      "instanceId": "123",
-      "name": "tag",
-      "type": "string",
-      "value": "h1",
-    },
-  ],
+  "props": [],
   "resources": [],
   "styleSourceSelections": [],
   "styleSources": [],
@@ -107,18 +100,11 @@ describe("Plugin Markdown", () => {
       ],
       "component": "Heading",
       "id": "123",
+      "tag": "h6",
       "type": "instance",
     },
   ],
-  "props": [
-    {
-      "id": "123",
-      "instanceId": "123",
-      "name": "tag",
-      "type": "string",
-      "value": "h6",
-    },
-  ],
+  "props": [],
   "resources": [],
   "styleSourceSelections": [],
   "styleSources": [],

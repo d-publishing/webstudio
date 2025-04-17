@@ -13,16 +13,18 @@ export * from "./components/label";
 export * from "./components/select";
 export * from "./components/combobox";
 export * from "./components/dropdown-menu";
+export * from "./components/context-menu";
 export * from "./components/icon-button"; // mostly aligned, but needs a demo and to use tokens
 export * from "./components/toggle-button";
 export * from "./components/dialog";
-export * from "./components/floating-panel-popover";
+export * from "./components/floating-panel";
 export * from "./components/popover";
 export {
   MenuList,
   MenuItemButton,
   MenuCheckedIcon,
   MenuItemIndicator,
+  menuItemCss,
 } from "./components/menu";
 export * from "./components/switch";
 export * from "./components/toolbar";
@@ -44,6 +46,8 @@ export * from "./components/ai-command-bar";
 export * from "./components/link";
 export * from "./components/panel-banner";
 export * from "./components/focus-ring";
+export * from "./components/tree";
+export * from "./components/command";
 
 // Not aligned
 
@@ -53,7 +57,7 @@ export { AccessibleIcon } from "@radix-ui/react-accessible-icon";
 export * from "./components/toggle-group";
 export * from "./components/progress-radial";
 export * from "./components/progress";
-export { SearchField } from "./components/search-field";
+export { SearchField, useSearchFieldKeys } from "./components/search-field";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "@radix-ui/react-tabs";
 export { Card } from "./components/card";
 export * from "./components/tooltip";
@@ -63,13 +67,10 @@ export {
   useEnhancedTooltipProps,
 } from "./components/enhanced-tooltip";
 export * from "./components/avatar";
-export * from "./components/tree";
 export * from "./components/pro-badge";
 
 // No need to align
 
-export { useId } from "@radix-ui/react-id";
-export * as Portal from "@radix-ui/react-portal";
 export { Box } from "./components/box";
 export { Flex } from "./components/flex";
 export { Grid } from "./components/grid";
@@ -84,10 +85,4 @@ export * from "./components/primitives/list";
 export * from "./components/kbd";
 
 // Deprecated
-
-export * from "./components/__DEPRECATED__/text2";
-export { DeprecatedButton } from "./components/__DEPRECATED__/button";
-export { DeprecatedIconButton } from "./components/__DEPRECATED__/icon-button";
-export * from "./components/__DEPRECATED__/popover";
-export * from "./components/__DEPRECATED__/text-field";
 export * from "./components/__DEPRECATED__/list";

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import type { Instance, Prop, Asset, Page } from "@webstudio-is/sdk";
-import type { PropMeta } from "@webstudio-is/react-sdk";
+import type { PropMeta, Instance, Prop, Asset, Page } from "@webstudio-is/sdk";
 import { textVariants } from "@webstudio-is/design-system";
 import { PropsSection } from "./props-section";
 import { usePropsLogic } from "./use-props-logic";
@@ -10,9 +9,9 @@ import {
   $pages,
   $props,
   registerComponentLibrary,
-  $selectedPageId,
 } from "~/shared/nano-states";
 import { createDefaultPages } from "@webstudio-is/project-build";
+import { $awareness } from "~/shared/awareness";
 
 let id = 0;
 const unique = () => `${++id}`;
@@ -27,15 +26,10 @@ const page = (name: string, path: string): Page => ({
   path,
   meta: {},
   rootInstanceId: unique(),
-  systemDataSourceId: unique(),
 });
 
 $pages.set({
-  ...createDefaultPages({
-    rootInstanceId: unique(),
-    systemDataSourceId: unique(),
-  }),
-
+  ...createDefaultPages({ rootInstanceId: unique() }),
   homePage: page("Home", "") as Page & { path: "" },
   pages: [
     page("About", "/about"),
@@ -95,7 +89,7 @@ const rootInstance = addLinkableSections(
   ["company", "employees"],
   $pages.get()?.pages[0]
 );
-$selectedPageId.set($pages.get()?.homePage.id);
+$awareness.set({ pageId: $pages.get()?.homePage.id ?? "" });
 
 const instance: Instance = {
   id: instanceId,
@@ -206,6 +200,7 @@ const checkProp = (options = defaultOptions, label?: string): PropMeta => ({
 registerComponentLibrary({
   components: {},
   metas: {},
+  templates: {},
   propsMetas: {
     Box: {
       props: {
@@ -375,10 +370,6 @@ const startingProps: Prop[] = [
 export const Story = () => {
   const [props, setProps] = useState(startingProps);
 
-  const handleDelete = (id: Prop["id"]) => {
-    setProps((current) => current.filter((prop) => prop.id !== id));
-  };
-
   const handleUpdate = (prop: Prop) => {
     setProps((current) => {
       const exists = current.find((item) => item.id === prop.id) !== undefined;
@@ -392,7 +383,6 @@ export const Story = () => {
     instance,
     props,
     updateProp: handleUpdate,
-    deleteProp: handleDelete,
   });
 
   return (
@@ -403,6 +393,7 @@ export const Story = () => {
           propsLogic={logic}
           propValues={new Map()}
           component="Button"
+          selectedInstanceKey={instanceId}
         />
       </div>
       <pre style={textVariants.mono}>

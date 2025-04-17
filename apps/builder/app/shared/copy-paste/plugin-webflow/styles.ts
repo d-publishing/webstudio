@@ -1,22 +1,22 @@
+import { nanoid } from "nanoid";
+import { url } from "css-tree";
 import type {
   Breakpoint,
   Instance,
   WebstudioFragment,
 } from "@webstudio-is/sdk";
-import type { WfAsset, WfElementNode, WfNode, WfStyle } from "./schema";
-import { nanoid } from "nanoid";
-import { $styleSources } from "~/shared/nano-states";
+import { equalMedia, hyphenateProperty } from "@webstudio-is/css-engine";
 import {
+  camelCaseProperty,
   parseCss,
   pseudoElements,
   type ParsedStyleDecl,
 } from "@webstudio-is/css-data";
-import { kebabCase } from "change-case";
-import { equalMedia, hyphenateProperty } from "@webstudio-is/css-engine";
-import type { Styles as WfStylePresets } from "./__generated__/style-presets";
+import { $styleSources } from "~/shared/nano-states";
 import { builderApi } from "~/shared/builder-api";
-import { url } from "css-tree";
 import { mapGroupBy } from "~/shared/shim";
+import type { WfStylePresets } from "./style-presets-overrides";
+import type { WfAsset, WfElementNode, WfNode, WfStyle } from "./schema";
 
 const { toast } = builderApi;
 
@@ -103,7 +103,7 @@ const replaceAtImages = (
 };
 
 const processStyles = (parsedStyles: ParsedStyleDecl[]) => {
-  const styles = new Map();
+  const styles = new Map<string, ParsedStyleDecl>();
   for (const parsedStyleDecl of parsedStyles) {
     const { breakpoint, selector, state, property } = parsedStyleDecl;
     const key = `${breakpoint}:${selector}:${state}:${property}`;
@@ -113,7 +113,7 @@ const processStyles = (parsedStyles: ParsedStyleDecl[]) => {
     const { breakpoint, selector, state, property } = parsedStyleDecl;
     const key = `${breakpoint}:${selector}:${state}:${property}`;
     styles.set(key, parsedStyleDecl);
-    if (property === "backgroundClip") {
+    if (property === "background-clip") {
       const colorKey = `${breakpoint}:${selector}:${state}:color`;
       styles.delete(colorKey);
       styles.set(colorKey, {
@@ -197,12 +197,12 @@ const addNodeStyles = ({
       fragment.styles.push({
         styleSourceId,
         breakpointId: breakpoint.id,
-        property: style.property,
+        property: camelCaseProperty(style.property),
         value: style.value,
         state: style.state,
       });
       if (style.value.type === "invalid") {
-        const error = `Invalid style value: Local "${kebabCase(style.property)}: ${style.value.value}"`;
+        const error = `Invalid style value: Local "${style.property}: ${style.value.value}"`;
         toast.error(error);
         console.error(error);
       }
@@ -366,6 +366,14 @@ const mapComponentAndPresetStyles = (
       presetStyles.push("wf-layout-layout");
       return presetStyles;
     }
+    case "HFlex": {
+      presetStyles.push("w-layout-hflex");
+      return presetStyles;
+    }
+    case "VFlex": {
+      presetStyles.push("w-layout-vflex");
+      return presetStyles;
+    }
     case "FormWrapper": {
       presetStyles.push("w-form");
       return presetStyles;
@@ -441,17 +449,28 @@ const mapComponentAndPresetStyles = (
 // Checks if a style source with that name already exists and the new one has new styles and is not empty - if so, adds a number to a name.
 const mergeComboStyles = (wfStyles: Array<WfStyle>) => {
   const classes = new Set<string>();
+  const skip = new Set<string>();
   let mergedStyle;
   for (const wfStyle of wfStyles) {
     const { name } = wfStyle;
 
     classes.add(name);
+
     if (mergedStyle === undefined) {
       mergedStyle = { variants: {}, ...wfStyle, name };
       continue;
     }
+
+    const comboClass = mergedStyle.name + "." + name;
+
+    // We need to avoid creating combo classes when they have no additional styles.
+    if (wfStyle.comb === "&" && wfStyle.styleLess === "") {
+      skip.add(comboClass);
+      continue;
+    }
+
     mergedStyle.styleLess += wfStyle.styleLess;
-    mergedStyle.name += "." + name;
+    mergedStyle.name = comboClass;
     for (const key in wfStyle.variants) {
       if (key in mergedStyle.variants === false) {
         mergedStyle.variants[key] = { styleLess: "" };
@@ -464,9 +483,9 @@ const mergeComboStyles = (wfStyles: Array<WfStyle>) => {
   // Produce all possible combinations of combo classes so we can check later if they alredy exist.
   // This is needed to achieve the same end-result as with combo-classes in webflow.
   // Example .a.b.c -> .a, .b, .c, .a.b, .a.c, .b.c, .a.b.c
-  const comboClasses = classesArray.flatMap((name1) =>
-    classesArray.map((name2) => `${name1}.${name2}`)
-  );
+  const comboClasses = classesArray
+    .flatMap((name1) => classesArray.map((name2) => `${name1}.${name2}`))
+    .filter((name) => skip.has(name) === false);
 
   return {
     mergedStyle,
@@ -490,9 +509,7 @@ export const addStyles = async ({
   fragment: WebstudioFragment;
   generateStyleSourceId: (sourceData: string) => Promise<string>;
 }) => {
-  const { styles: stylePresets } = await import(
-    "./__generated__/style-presets"
-  );
+  const { stylePresets } = await import("./style-presets-overrides");
 
   for (const wfNode of wfNodes.values()) {
     if ("text" in wfNode) {

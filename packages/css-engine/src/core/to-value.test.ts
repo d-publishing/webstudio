@@ -1,4 +1,4 @@
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import { toValue } from "./to-value";
 
 describe("Convert WS CSS Values to native CSS strings", () => {
@@ -23,7 +23,7 @@ describe("Convert WS CSS Values to native CSS strings", () => {
   });
 
   test("var", () => {
-    const value = toValue({ type: "var", value: "namespace", fallbacks: [] });
+    const value = toValue({ type: "var", value: "namespace" });
     expect(value).toBe("var(--namespace)");
   });
 
@@ -31,27 +31,59 @@ describe("Convert WS CSS Values to native CSS strings", () => {
     const value = toValue({
       type: "var",
       value: "namespace",
-      fallbacks: [
-        {
-          type: "keyword",
-          value: "normal",
-        },
-        {
-          type: "unit",
-          value: 10,
-          unit: "px",
-        },
-      ],
+      fallback: {
+        type: "unparsed",
+        value: "normal, 10px",
+      },
     });
     expect(value).toBe("var(--namespace, normal, 10px)");
   });
 
-  test("fontFamily", () => {
-    const value = toValue({
-      type: "fontFamily",
-      value: ["Courier New"],
-    });
-    expect(value).toBe('"Courier New", monospace');
+  test("fontFamily is known stack name", () => {
+    expect(
+      toValue({
+        type: "fontFamily",
+        value: ["Humanist"],
+      })
+    ).toBe(
+      'Seravek, "Gill Sans Nova", Ubuntu, Calibri, "DejaVu Sans", source-sans-pro, sans-serif'
+    );
+  });
+
+  test("fontFamily is a custom stack", () => {
+    expect(
+      toValue({
+        type: "fontFamily",
+        value: ["DejaVu Sans Mono", "monospace"],
+      })
+    ).toBe('"DejaVu Sans Mono", monospace');
+  });
+
+  test("fontFamily is unknown family name", () => {
+    expect(
+      toValue({
+        type: "fontFamily",
+        value: ["something-random"],
+      })
+    ).toBe("something-random, sans-serif");
+  });
+
+  test("fontFamily is empty", () => {
+    expect(
+      toValue({
+        type: "fontFamily",
+        value: [],
+      })
+    ).toBe("sans-serif");
+  });
+
+  test("fontFamily has duplicates", () => {
+    expect(
+      toValue({
+        type: "fontFamily",
+        value: ["a", "a", "b"],
+      })
+    ).toBe("a, b");
   });
 
   test("Transform font family value to override default fallback", () => {
@@ -64,12 +96,12 @@ describe("Convert WS CSS Values to native CSS strings", () => {
         if (styleValue.type === "fontFamily") {
           return {
             type: "fontFamily",
-            value: [styleValue.value[0]],
+            value: ["A B"],
           };
         }
       }
     );
-    expect(value).toBe('"Courier New"');
+    expect(value).toBe('"A B"');
   });
 
   test("array", () => {
@@ -146,13 +178,12 @@ describe("Convert WS CSS Values to native CSS strings", () => {
       type: "function",
       name: "drop-shadow",
       args: {
-        type: "tuple",
-        value: [
-          { type: "unit", value: 10, unit: "px" },
-          { type: "unit", value: 10, unit: "px" },
-          { type: "unit", value: 10, unit: "px" },
-          { type: "keyword", value: "red" },
-        ],
+        type: "shadow",
+        position: "outset",
+        offsetX: { type: "unit", value: 10, unit: "px" },
+        offsetY: { type: "unit", value: 10, unit: "px" },
+        blur: { type: "unit", value: 10, unit: "px" },
+        color: { type: "keyword", value: "red" },
       },
     });
 
@@ -201,5 +232,81 @@ describe("Convert WS CSS Values to native CSS strings", () => {
       type: "guaranteedInvalid",
     });
     expect(value).toBe("");
+  });
+});
+
+describe("serialize shadow value", () => {
+  test("minimal value", () => {
+    expect(
+      toValue({
+        type: "layers",
+        value: [
+          {
+            type: "shadow",
+            position: "outset",
+            offsetX: { type: "unit", value: 1, unit: "px" },
+            offsetY: { type: "unit", value: 2, unit: "px" },
+          },
+        ],
+      })
+    ).toEqual("1px 2px");
+  });
+
+  test("full value", () => {
+    expect(
+      toValue({
+        type: "layers",
+        value: [
+          {
+            type: "shadow",
+            position: "inset",
+            offsetX: { type: "unit", value: 1, unit: "px" },
+            offsetY: { type: "unit", value: 2, unit: "px" },
+            blur: { type: "unit", value: 3, unit: "px" },
+            spread: { type: "unit", value: 4, unit: "px" },
+            color: { type: "rgb", r: 0, g: 0, b: 0, alpha: 1 },
+          },
+        ],
+      })
+    ).toEqual("1px 2px 3px 4px rgba(0, 0, 0, 1) inset");
+  });
+
+  test("hidden value", () => {
+    expect(
+      toValue({
+        type: "layers",
+        value: [
+          {
+            type: "shadow",
+            hidden: true,
+            position: "outset",
+            offsetX: { type: "unit", value: 1, unit: "px" },
+            offsetY: { type: "unit", value: 2, unit: "px" },
+          },
+        ],
+      })
+    ).toEqual("none");
+  });
+
+  test("multiple values", () => {
+    expect(
+      toValue({
+        type: "layers",
+        value: [
+          {
+            type: "shadow",
+            position: "outset",
+            offsetX: { type: "unit", value: 1, unit: "px" },
+            offsetY: { type: "unit", value: 2, unit: "px" },
+          },
+          {
+            type: "shadow",
+            position: "outset",
+            offsetX: { type: "unit", value: 3, unit: "px" },
+            offsetY: { type: "unit", value: 4, unit: "px" },
+          },
+        ],
+      })
+    ).toEqual("1px 2px, 3px 4px");
   });
 });

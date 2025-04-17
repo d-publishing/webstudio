@@ -1,4 +1,4 @@
-import type { PropMeta } from "@webstudio-is/react-sdk";
+import type { PropMeta } from "@webstudio-is/sdk";
 
 export const propsSelect: Record<string, PropMeta> = {
   autoComplete: {
@@ -8,6 +8,7 @@ export const propsSelect: Record<string, PropMeta> = {
     description:
       "Indicates whether controls in this form can by default have their valuesautomatically completed by the browser.",
   },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "radio",
@@ -21,6 +22,12 @@ export const propsSelect: Record<string, PropMeta> = {
     control: "boolean",
     type: "boolean",
     description: "Indicates whether the user can interact with the element.",
+  },
+  form: {
+    required: false,
+    control: "text",
+    type: "string",
+    description: "Indicates the form that is the owner of the element.",
   },
   name: {
     required: false,
@@ -472,6 +479,7 @@ export const propsSelectTrigger: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -667,6 +675,13 @@ export const propsSelectTrigger: Record<string, PropMeta> = {
     control: "radio",
     type: "string",
     options: ["on", "off"],
+  },
+  value: {
+    required: false,
+    control: "text",
+    type: "string",
+    description:
+      "Defines a default value which will be displayed in the element on pageload.",
   },
   vocab: { required: false, control: "text", type: "string" },
 };
@@ -1091,6 +1106,7 @@ export const propsSelectValue: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -1666,6 +1682,7 @@ export const propsSelectContent: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -2238,6 +2255,7 @@ export const propsSelectViewport: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -2796,6 +2814,7 @@ export const propsSelectItem: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -3368,6 +3387,7 @@ export const propsSelectItemIndicator: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",
@@ -3926,6 +3946,7 @@ export const propsSelectItemText: Record<string, PropMeta> = {
       "Defines the ID of a menu element which willserve as the element's context menu.",
   },
   datatype: { required: false, control: "text", type: "string" },
+  defaultValue: { required: false, control: "text", type: "string" },
   dir: {
     required: false,
     control: "text",

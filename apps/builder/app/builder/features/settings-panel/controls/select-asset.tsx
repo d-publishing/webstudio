@@ -1,16 +1,9 @@
 import { useMemo } from "react";
 import { computed } from "nanostores";
 import { useStore } from "@nanostores/react";
-import {
-  Button,
-  Flex,
-  SmallIconButton,
-  Text,
-} from "@webstudio-is/design-system";
-import { TrashIcon } from "@webstudio-is/icons";
+import { Button, Flex, Text, FloatingPanel } from "@webstudio-is/design-system";
 import type { Prop } from "@webstudio-is/sdk";
 import { $assets } from "~/shared/nano-states";
-import { FloatingPanel } from "~/builder/shared/floating-panel";
 import { ImageManager } from "~/builder/shared/image-manager";
 import { type ControlProps } from "../shared";
 import { acceptToMimeCategories } from "@webstudio-is/asset-uploader";
@@ -30,10 +23,9 @@ type Props = {
   accept?: string;
   prop?: Extract<Prop, { type: "asset" }>;
   onChange: AssetControlProps["onChange"];
-  onDelete: AssetControlProps["onDelete"];
 };
 
-export const SelectAsset = ({ prop, onChange, onDelete, accept }: Props) => {
+export const SelectAsset = ({ prop, onChange, accept }: Props) => {
   const $asset = useMemo(
     () =>
       computed($assets, (assets) =>
@@ -63,13 +55,6 @@ export const SelectAsset = ({ prop, onChange, onDelete, accept }: Props) => {
           {asset?.name ?? "Choose source"}
         </Button>
       </FloatingPanel>
-      {prop ? (
-        <SmallIconButton
-          icon={<TrashIcon />}
-          onClick={onDelete}
-          variant="destructive"
-        />
-      ) : null}
     </Flex>
   );
 };

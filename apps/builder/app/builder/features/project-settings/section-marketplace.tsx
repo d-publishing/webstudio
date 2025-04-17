@@ -14,34 +14,36 @@ import {
   InputErrorsTooltip,
   PanelBanner,
   Select,
-  rawTheme,
   Box,
 } from "@webstudio-is/design-system";
-import { ImageControl } from "./image-control";
-import {
-  $assets,
-  $imageLoader,
-  $marketplaceProduct,
-  $project,
-} from "~/shared/nano-states";
-import { Image } from "@webstudio-is/image";
-import { useIds } from "~/shared/form-utils";
+import { Image, wsImageLoader } from "@webstudio-is/image";
 import { useState } from "react";
 import {
   MarketplaceProduct,
   marketplaceCategories,
 } from "@webstudio-is/project-build";
-import { serverSyncStore } from "~/shared/sync";
+import { ImageControl } from "./image-control";
+import { $assets, $marketplaceProduct, $project } from "~/shared/nano-states";
+import { useIds } from "~/shared/form-utils";
 import { MarketplaceApprovalStatus } from "@webstudio-is/project";
+import { serverSyncStore } from "~/shared/sync";
 import { trpcClient } from "~/shared/trpc/trpc-client";
 import { rightPanelWidth, sectionSpacing } from "./utils";
 
 const thumbnailStyle = css({
   borderRadius: theme.borderRadius[4],
-  borderWidth: 1,
-  borderStyle: "solid",
-  borderColor: theme.colors.borderMain,
+  outlineWidth: 1,
+  outlineStyle: "solid",
+  outlineColor: theme.colors.borderMain,
+  width: theme.spacing[28],
   aspectRatio: "1.91",
+  background: "#DFE3E6",
+});
+
+const thumbnailImageStyle = css({
+  display: "block",
+  width: "100%",
+  height: "100%",
   variants: {
     hasAsset: {
       true: {
@@ -116,7 +118,6 @@ const useMarketplaceApprovalStatus = () => {
 
 export const SectionMarketplace = () => {
   const project = useStore($project);
-  const imageLoader = useStore($imageLoader);
   const approval = useMarketplaceApprovalStatus();
   const [data, setData] = useState(() => $marketplaceProduct.get());
   const ids = useIds([
@@ -206,26 +207,29 @@ export const SectionMarketplace = () => {
 
       <Grid gap={2} css={sectionSpacing}>
         <Label>Thumbnail</Label>
-        <Grid flow="column" gap={3}>
-          <InputErrorsTooltip errors={errors?.thumbnailAssetId}>
-            <Image
-              width={rawTheme.spacing[28]}
-              className={thumbnailStyle({ hasAsset: asset !== undefined })}
-              src={asset ? `${asset.name}` : undefined}
-              loader={imageLoader}
-            />
-          </InputErrorsTooltip>
+        <InputErrorsTooltip errors={errors?.thumbnailAssetId}>
+          <Grid flow="column" gap={3}>
+            <Box className={thumbnailStyle()}>
+              <Image
+                className={thumbnailImageStyle({
+                  hasAsset: asset !== undefined,
+                })}
+                src={asset ? `${asset.name}` : undefined}
+                loader={wsImageLoader}
+              />
+            </Box>
 
-          <Grid gap={2}>
-            <Text color="subtle">
-              The optimal dimensions in marketplace are 600x315 px or larger
-              with a 1.91:1 aspect ratio.
-            </Text>
-            <ImageControl onAssetIdChange={handleSave("thumbnailAssetId")}>
-              <Button css={{ justifySelf: "start" }}>Upload</Button>
-            </ImageControl>
+            <Grid gap={2}>
+              <Text color="subtle">
+                The optimal dimensions in marketplace are 600x315 px or larger
+                with a 1.91:1 aspect ratio.
+              </Text>
+              <ImageControl onAssetIdChange={handleSave("thumbnailAssetId")}>
+                <Button css={{ justifySelf: "start" }}>Upload</Button>
+              </ImageControl>
+            </Grid>
           </Grid>
-        </Grid>
+        </InputErrorsTooltip>
       </Grid>
 
       <Grid gap={1} css={sectionSpacing}>

@@ -2,6 +2,7 @@ import { cwd, exit } from "node:process";
 import { join } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 import { cancel, isCancel, log, text } from "@clack/prompts";
+import { parseBuilderUrl } from "@webstudio-is/http-client";
 import {
   GLOBAL_CONFIG_FILE,
   LOCAL_CONFIG_FILE,
@@ -16,20 +17,32 @@ import type {
 } from "./yargs-types";
 
 const parseShareLink = (value: string) => {
-  const url = new URL(value);
-  const origin = url.origin;
+  // value.replaceAll("'", "") is used to remove single quotes from the URL on Windows.
+  // This is necessary because the following pnpm script works on macOS and Linux but fails here on Windows:
+  // "fixtures:link": "pnpm cli link --link https://p-cddc1d44-af37-4cb6-a430-d300cf6f932d-dot-${BUILDER_HOST:-main.development.webstudio.is}'?authToken=1cdc6026-dd5b-4624-b89b-9bd45e9bcc3d'",
+  // On Windows, single quotes are incorrectly included in the URL.
+  const url = new URL(value.replaceAll("'", ""));
+
   const token = url.searchParams.get("authToken");
-  // @todo parse with URLPattern once landed in node
-  const segments = url.pathname.split("/").slice(1);
-  if (segments.length !== 2 || segments[0] !== "builder") {
-    throw Error("Segments not matching");
+
+  // eslint-disable-next-line prefer-const
+  let { projectId, sourceOrigin } = parseBuilderUrl(url.href);
+
+  if (projectId === undefined) {
+    // Support deprecated links until the end of 2024
+    const segments = url.pathname.split("/").slice(1);
+    if (segments.length !== 2 || segments[0] !== "builder") {
+      throw Error("Segments not matching");
+    }
+    projectId = segments[1];
   }
-  const [_builder, projectId] = segments;
+
   if (token == null) {
     throw Error("Token is missing");
   }
+
   return {
-    origin,
+    origin: sourceOrigin,
     projectId,
     token,
   };

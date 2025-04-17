@@ -14,7 +14,7 @@ const isLonghandValue = (value?: StyleValue): value is StyleValue => {
     return false;
   }
   if (value.type === "var") {
-    const fallback = value.fallbacks.at(0);
+    const fallback = value.fallback;
     if (fallback?.type === "keyword" && cssWideKeywords.has(fallback.value)) {
       return false;
     }
@@ -93,6 +93,9 @@ const mergeWhiteSpaceAndTextWrap = (styleMap: StyleMap) => {
   }
   if (collapse === "break-spaces") {
     styleMap.set("white-space", { type: "keyword", value: "break-spaces" });
+  }
+  if (style === "auto") {
+    styleMap.set("text-wrap", modeValue ?? { type: "keyword", value: "wrap" });
   }
   if (style === "balance" || style === "stable" || style === "pretty") {
     styleMap.set("text-wrap", { type: "keyword", value: style });

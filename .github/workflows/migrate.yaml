@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ endsWith(github.ref_name, '.staging') && 'postgres_production' || 'postgres_development' }}
+      name: ${{ (startsWith(github.ref_name, 'release') && endsWith(github.ref_name, '.staging')) && 'postgres_production' || 'postgres_development' }}
 
     timeout-minutes: 20
 
@@ -40,7 +40,7 @@ jobs:
         with:
           ref: ${{ github.sha }} # HEAD commit instead of merge commit
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -49,11 +49,34 @@ jobs:
       - name: pnpm instal
         run: pnpm install --ignore-scripts
 
-      - name: build prisma client
-        run: pnpm --filter '@webstudio-is/prisma-client...' run build
+      - name: generate prisma
+        run: pnpm --filter=@webstudio-is/prisma-client generate
 
       - name: execute migration
         run: pnpm --filter '@webstudio-is/prisma-client' run migrations migrate
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+  # Execute db tests (@todo: can be done only after applying the migrations, now always())
+  db-tests:
+    if: always()
+
+    needs: [migrate]
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ (startsWith(github.ref_name, 'release') && endsWith(github.ref_name, '.staging')) && 'postgres_production' || 'postgres_development' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }} # HEAD commit instead of merge commit
+
+      - uses: pnpm/action-setup@v4
+
+      - name: pnpm instal
+        run: pnpm -r db-test
         env:
           DIRECT_URL: ${{ secrets.DIRECT_URL }}
 
@@ -66,14 +89,14 @@ jobs:
     runs-on: ubuntu-latest
 
     environment:
-      name: ${{ endsWith(github.ref_name, '.staging') && 'postgres_production' || 'postgres_development' }}
+      name: ${{ (startsWith(github.ref_name, 'release') && endsWith(github.ref_name, '.staging')) && 'postgres_production' || 'postgres_development' }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }} # HEAD commit instead of merge commit
 
-      - uses: pnpm/action-setup@v3
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -82,8 +105,8 @@ jobs:
       - name: pnpm instal
         run: pnpm install --ignore-scripts
 
-      - name: build prisma client
-        run: pnpm --filter '@webstudio-is/prisma-client...' run build
+      - name: generate prisma
+        run: pnpm --filter=@webstudio-is/prisma-client generate
 
       - name: get pending
         id: pending

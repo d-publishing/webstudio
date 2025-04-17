@@ -4,8 +4,8 @@ import {
   type WsComponentPropsMeta,
   type PresetStyle,
   defaultStates,
-} from "@webstudio-is/react-sdk";
-import { textarea } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { textarea } from "@webstudio-is/sdk/normalize.css";
 import type { defaultTag } from "./textarea";
 import { props } from "./__generated__/textarea.props";
 
@@ -30,7 +30,6 @@ export const meta: WsComponentMeta = {
   icon: FormTextAreaIcon,
   presetStyle,
   order: 4,
-  invalidAncestors: ["Button", "Link"],
   states: [
     ...defaultStates,
     { selector: "::placeholder", label: "Placeholder" },
@@ -52,6 +51,7 @@ export const propsMeta: WsComponentPropsMeta = {
     "id",
     "className",
     "name",
+    "value",
     "placeholder",
     "required",
     "autoFocus",

@@ -1,4 +1,4 @@
-import { expect, test } from "@jest/globals";
+import { expect, test } from "vitest";
 import {
   compilePathnamePattern,
   isPathnamePattern,
@@ -214,5 +214,11 @@ test(`forbid named group with static parts before or after`, () => {
   ]);
   expect(validatePathnamePattern("/prefix-:id-suffix")).toEqual([
     `Static parts cannot be mixed with dynamic parameters at 'prefix-:id-suffix'.`,
+  ]);
+});
+
+test(`? should be allowed in named groups only`, () => {
+  expect(validatePathnamePattern("/name?")).toEqual([
+    `Optional parameter indicator ? must be at the end of the named parameter. Correct usage: /:param?`,
   ]);
 });

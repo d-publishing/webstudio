@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid";
-import {
+import { shallowEqual } from "shallow-equal";
+import type {
   Instance,
   Instances,
   Prop,
@@ -8,31 +9,16 @@ import {
   Styles,
   StyleSource,
   StyleSourceSelection,
+  WsComponentMeta,
 } from "@webstudio-is/sdk";
-import { findTreeInstanceIds } from "@webstudio-is/sdk";
-import {
-  collectionComponent,
-  type WsComponentMeta,
-} from "@webstudio-is/react-sdk";
+import { collectionComponent } from "@webstudio-is/sdk";
+import { isRichTextTree } from "./content-model";
 
 // slots can have multiple parents so instance should be addressed
 // with full rendered path to avoid double selections with slots
 // and support deletion of slot child from specific parent
 // selector starts with target instance and ends with root
 export type InstanceSelector = Instance["id"][];
-
-// provide a selector starting with ancestor id
-// useful to select parent instance or one of breadcrumbs instances
-export const getAncestorInstanceSelector = (
-  instanceSelector: InstanceSelector,
-  ancestorId: Instance["id"]
-): undefined | InstanceSelector => {
-  const ancestorIndex = instanceSelector.indexOf(ancestorId);
-  if (ancestorIndex === -1) {
-    return undefined;
-  }
-  return instanceSelector.slice(ancestorIndex);
-};
 
 export const areInstanceSelectorsEqual = (
   left?: InstanceSelector,
@@ -44,9 +30,41 @@ export const areInstanceSelectorsEqual = (
   return left.join(",") === right.join(",");
 };
 
+export const isDescendantOrSelf = (
+  descendant: InstanceSelector,
+  self: InstanceSelector
+) => {
+  if (self.length === 0) {
+    return true;
+  }
+
+  if (descendant.length < self.length) {
+    return false;
+  }
+
+  const endSlice = descendant.slice(-self.length);
+
+  return shallowEqual(endSlice, self);
+};
+
 export type DroppableTarget = {
   parentSelector: InstanceSelector;
   position: number | "end";
+};
+
+const getCollectionDropTarget = (
+  instances: Instances,
+  dropTarget: DroppableTarget
+) => {
+  const [parentId, grandparentId] = dropTarget.parentSelector;
+  const parent = instances.get(parentId);
+  const grandparent = instances.get(grandparentId);
+  if (parent === undefined && grandparent?.component === collectionComponent) {
+    return {
+      parentSelector: dropTarget.parentSelector.slice(1),
+      position: dropTarget.position,
+    };
+  }
 };
 
 export const getInstanceOrCreateFragmentIfNecessary = (
@@ -131,17 +149,14 @@ export const wrapEditableChildrenAroundDropTargetMutable = (
     return;
   }
   // wrap only containers with text and rich text childre
-  for (const child of parentInstance.children) {
-    if (child.type === "id") {
-      const childInstance = instances.get(child.value);
-      if (childInstance === undefined) {
-        return;
-      }
-      const childMeta = metas.get(childInstance.component);
-      if (childMeta?.type !== "rich-text-child") {
-        return;
-      }
-    }
+  const isParentRichText = isRichTextTree({
+    instances,
+    props,
+    metas,
+    instanceId: parentId,
+  });
+  if (!isParentRichText) {
+    return;
   }
   const position =
     dropTarget.position === "end"
@@ -200,25 +215,9 @@ export const getReparentDropTargetMutable = (
   instances: Instances,
   props: Props,
   metas: Map<string, WsComponentMeta>,
-  instanceSelector: InstanceSelector,
   dropTarget: DroppableTarget
 ): undefined | DroppableTarget => {
-  const [instanceId, parentInstanceId, grandparentInstanceId] =
-    instanceSelector;
-  const grandparentInstance =
-    grandparentInstanceId === undefined
-      ? undefined
-      : instances.get(grandparentInstanceId);
-
-  let prevParent =
-    parentInstanceId === undefined
-      ? undefined
-      : instances.get(parentInstanceId);
-  // skip parent fake "item" instance and use grandparent collection as parent
-  if (grandparentInstance?.component === collectionComponent) {
-    prevParent = grandparentInstance;
-  }
-
+  dropTarget = getCollectionDropTarget(instances, dropTarget) ?? dropTarget;
   dropTarget =
     getInstanceOrCreateFragmentIfNecessary(instances, dropTarget) ?? dropTarget;
   dropTarget =
@@ -228,44 +227,7 @@ export const getReparentDropTargetMutable = (
       metas,
       dropTarget
     ) ?? dropTarget;
-  const [parentId] = dropTarget.parentSelector;
-  const nextParent = instances.get(parentId);
-
-  // delect is target is one of own descendants
-  // prevent reparenting to avoid infinite loop
-  const instanceDescendants = findTreeInstanceIds(instances, instanceId);
-  for (const instanceId of instanceDescendants) {
-    if (dropTarget.parentSelector.includes(instanceId)) {
-      return;
-    }
-  }
-
-  if (prevParent === undefined || nextParent === undefined) {
-    return;
-  }
-
-  const prevPosition = prevParent.children.findIndex(
-    (child) => child.type === "id" && child.value === instanceId
-  );
-  if (prevPosition === -1) {
-    return;
-  }
-
-  // if parent is the same, we need to adjust the position
-  // to account for the removal of the instance.
-  let nextPosition = dropTarget.position;
-  if (
-    nextPosition !== "end" &&
-    prevParent.id === nextParent.id &&
-    prevPosition < nextPosition
-  ) {
-    nextPosition -= 1;
-  }
-
-  return {
-    parentSelector: dropTarget.parentSelector,
-    position: nextPosition,
-  };
+  return dropTarget;
 };
 
 export const cloneStyles = (
@@ -315,30 +277,4 @@ export const findLocalStyleSourcesWithinInstances = (
   }
 
   return subtreeLocalStyleSourceIds;
-};
-
-export const insertPropsCopyMutable = (
-  props: Props,
-  copiedProps: Prop[],
-  copiedInstanceIds: Map<Instance["id"], Instance["id"]>
-) => {
-  for (const prop of copiedProps) {
-    const newInstanceId = copiedInstanceIds.get(prop.instanceId);
-    // insert without changes when instance does not have new id
-    if (newInstanceId === undefined) {
-      // prevent overriding shared props if already exist
-      if (props.has(prop.id) === false) {
-        props.set(prop.id, prop);
-      }
-      continue;
-    }
-
-    // copy prop before inserting
-    const newPropId = nanoid();
-    props.set(newPropId, {
-      ...prop,
-      id: newPropId,
-      instanceId: newInstanceId,
-    });
-  }
 };

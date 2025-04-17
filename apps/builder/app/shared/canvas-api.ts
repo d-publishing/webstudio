@@ -4,6 +4,7 @@ import { monitorForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/a
 import { createRecursiveProxy } from "@trpc/server/shared";
 import invariant from "tiny-invariant";
 import { $canvasIframeState } from "./nano-states";
+import { detectSupportedFontWeights } from "~/canvas/shared/font-weight-support";
 
 const apiWindowNamespace = "__webstudio__$__canvasApi";
 
@@ -13,6 +14,7 @@ const _canvasApi = {
   resetInert,
   preventUnhandled,
   monitorForExternal,
+  detectSupportedFontWeights,
 };
 
 declare global {
@@ -24,7 +26,7 @@ declare global {
 const isInIframe = () => {
   try {
     return window.self !== window.top;
-  } catch (e) {
+  } catch (error) {
     return true;
   }
 };
@@ -72,7 +74,6 @@ export const canvasApi = createRecursiveProxy((options) => {
       return false;
     }
 
-    // eslint-disable-next-line no-console
     console.warn(
       `API not found in the iframe, skipping ${options.path.join(".")} call, iframe probably not loaded yet`
     );

@@ -12,7 +12,7 @@ const numericTypes = [
   "y",
 ] as const;
 
-export const valueTypes = [
+export const valueTypes: string[] = [
   ...numericTypes,
   "hex-color",
   "url",
@@ -28,57 +28,89 @@ export const valueTypes = [
   "anchor-element",
   "try-tactic",
   "try-size",
-] as const;
-
-export type UnitGroup = (typeof numericTypes)[number];
+];
 
 // Data type used before we generate a the constants.
 export type RawPropertyData = {
-  unitGroups: Array<UnitGroup>;
+  unitGroups: Array<string>;
   inherited: boolean;
   initial: StyleValue;
-  types: Array<(typeof valueTypes)[number]>;
+  mdnUrl?: string;
 };
 
 export const propertiesData: { [property: string]: RawPropertyData } = {};
 export const keywordValues: { [property: string]: Array<string> } = {};
 
-propertiesData.WebkitFontSmoothing = {
+propertiesData["-webkit-font-smoothing"] = {
   unitGroups: [],
   inherited: true,
   initial: {
     type: "keyword",
     value: "auto",
   },
-  types: [],
+  mdnUrl: "https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth",
 };
-keywordValues.WebkitFontSmoothing = [
+keywordValues["-webkit-font-smoothing"] = [
   "auto",
   "none",
   "antialiased",
   "subpixel-antialiased",
 ];
 
-propertiesData.MozOsxFontSmoothing = {
+propertiesData["-moz-osx-font-smoothing"] = {
   unitGroups: [],
   inherited: true,
   initial: {
     type: "keyword",
     value: "auto",
   },
-  types: [],
+  mdnUrl: "https://developer.mozilla.org/en-US/docs/Web/CSS/font-smooth",
 };
-keywordValues.MozOsxFontSmoothing = ["auto", "grayscale"];
+keywordValues["-moz-osx-font-smoothing"] = ["auto", "grayscale"];
 
 propertiesData["-webkit-box-orient"] = {
   unitGroups: [],
   inherited: false,
   initial: { type: "keyword", value: "horizontal" },
-  types: [],
+  mdnUrl: "https://developer.mozilla.org/en-US/docs/Web/CSS/box-orient",
 };
 keywordValues["-webkit-box-orient"] = ["horizontal", "vertical"];
 
-keywordValues.listStyleType = [
+propertiesData["view-timeline-name"] = {
+  unitGroups: [],
+  inherited: false,
+  initial: {
+    type: "keyword",
+    value: "none",
+  },
+  mdnUrl: "https://developer.mozilla.org/en-US/docs/Web/CSS/view-timeline-name",
+};
+keywordValues["view-timeline-name"] = [];
+propertiesData["scroll-timeline-name"] = {
+  unitGroups: [],
+  inherited: false,
+  initial: {
+    type: "keyword",
+    value: "none",
+  },
+  mdnUrl:
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/scroll-timeline-name",
+};
+keywordValues["scroll-timeline-name"] = [];
+
+propertiesData["view-timeline-inset"] = {
+  unitGroups: ["length", "percentage"],
+  inherited: false,
+  initial: {
+    type: "keyword",
+    value: "auto",
+  },
+  mdnUrl:
+    "https://developer.mozilla.org/en-US/docs/Web/CSS/view-timeline-inset",
+};
+keywordValues["view-timeline-inset"] = [];
+
+keywordValues["list-style-type"] = [
   "disc",
   "circle",
   "square",
@@ -86,4 +118,51 @@ keywordValues.listStyleType = [
   "georgian",
   "trad-chinese-informal",
   "kannada",
+  "none",
+  "initial",
+  "inherit",
+  "unset",
 ];
+
+// removed auto from keywords
+// fixed in webref btw
+keywordValues["text-wrap-mode"] = [
+  "wrap",
+  "nowrap",
+  "initial",
+  "inherit",
+  "unset",
+];
+
+export const customLonghandPropertyNames = [
+  "boxShadowOffsetX",
+  "boxShadowOffsetY",
+  "boxShadowBlurRadius",
+  "boxShadowSpreadRadius",
+  "boxShadowColor",
+  "boxShadowPosition",
+  "textShadowOffsetX",
+  "textShadowOffsetY",
+  "textShadowBlurRadius",
+  "textShadowColor",
+  "dropShadowOffsetX",
+  "dropShadowOffsetY",
+  "dropShadowBlurRadius",
+  "dropShadowColor",
+  "translateX",
+  "translateY",
+  "translateZ",
+  "rotateX",
+  "rotateY",
+  "rotateZ",
+  "scaleX",
+  "scaleY",
+  "scaleZ",
+  "skewX",
+  "skewY",
+  "transformOriginX",
+  "transformOriginY",
+  "transformOriginZ",
+  "perspectiveOriginX",
+  "perspectiveOriginY",
+] as const;

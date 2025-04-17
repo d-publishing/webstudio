@@ -7,27 +7,35 @@ import {
   useMemo,
   Fragment,
   type ReactNode,
+  type JSX,
 } from "react";
-import { Suspense, lazy } from "react";
+import { $getSelection, $isRangeSelection } from "lexical";
 import { computed } from "nanostores";
 import { useStore } from "@nanostores/react";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { mergeRefs } from "@react-aria/utils";
-import type { Instance, Instances, Prop } from "@webstudio-is/sdk";
-import { findTreeInstanceIds } from "@webstudio-is/sdk";
+import type {
+  Instance,
+  Instances,
+  Prop,
+  WsComponentMeta,
+} from "@webstudio-is/sdk";
 import {
-  type WebstudioComponentProps,
+  findTreeInstanceIds,
+  collectionComponent,
+  descendantComponent,
+  blockComponent,
+  blockTemplateComponent,
+  getIndexesWithinAncestors,
+} from "@webstudio-is/sdk";
+import { indexProperty, tagProperty } from "@webstudio-is/sdk/runtime";
+import {
   idAttribute,
   componentAttribute,
   showAttribute,
   selectorIdAttribute,
-  indexAttribute,
-  getIndexesWithinAncestors,
-  createInstanceChildrenElements,
-  collectionComponent,
   type AnyComponent,
   textContentAttribute,
-  descendantComponent,
 } from "@webstudio-is/react-sdk";
 import { rawTheme } from "@webstudio-is/design-system";
 import {
@@ -36,8 +44,8 @@ import {
   $instances,
   $registeredComponentMetas,
   $selectedInstanceRenderState,
-  $selectedInstanceSelector,
-  $selectedPage,
+  findBlockSelector,
+  $props,
 } from "~/shared/nano-states";
 import { $textEditingInstanceSelector } from "~/shared/nano-states";
 import {
@@ -47,15 +55,28 @@ import {
 import { setDataCollapsed } from "~/canvas/collapsed";
 import { getIsVisuallyHidden } from "~/shared/visually-hidden";
 import { serverSyncStore } from "~/shared/sync";
-
-const TextEditor = lazy(async () => {
-  const { TextEditor } = await import("../text-editor");
-  return { default: TextEditor };
-});
+import { TextEditor } from "../text-editor";
+import {
+  $selectedPage,
+  getInstanceKey,
+  selectInstance,
+} from "~/shared/awareness";
+import {
+  createInstanceChildrenElements,
+  type WebstudioComponentProps,
+} from "~/canvas/elements";
+import { Block } from "../build-mode/block";
+import { BlockTemplate } from "../build-mode/block-template";
+import {
+  editablePlaceholderAttribute,
+  editingPlaceholderVariable,
+} from "~/canvas/shared/styles";
 
 const ContentEditable = ({
+  placeholder,
   renderComponentWithRef,
 }: {
+  placeholder: string | undefined;
   renderComponentWithRef: (
     elementRef: ForwardedRef<HTMLElement>
   ) => JSX.Element;
@@ -68,7 +89,7 @@ const ContentEditable = ({
    * useLayoutEffect to be sure that editor plugins on useEffect would have access to rootElement
    */
   useLayoutEffect(() => {
-    let rootElement = ref.current;
+    const rootElement = ref.current;
 
     if (rootElement == null) {
       return;
@@ -78,25 +99,69 @@ const ContentEditable = ({
       return;
     }
 
-    if (rootElement?.tagName === "BUTTON" || rootElement.tagName === "A") {
-      // <button> with contentEditable does not let to press space
-      // <a> stops working with inline-flex when only 1 character left
-      // so add span inside and use it as editor element in lexical
-      const span = document.createElement("span");
-      for (const child of rootElement.childNodes) {
-        rootElement.removeChild(child);
-        span.appendChild(child);
+    if (rootElement.tagName === "A") {
+      if (window.getComputedStyle(rootElement).display === "inline-flex") {
+        // Issue: <a> tag doesn't work with inline-flex when the cursor is at the start or end of the text.
+        // Solution: Inline-flex is not supported by Lexical. Use "inline" during editing.
+        rootElement.style.display = "inline";
       }
-      rootElement.appendChild(span);
+    }
 
-      rootElement = span;
+    // Issue: <button> with contentEditable does not allow pressing space.
+    // Solution: Add space on space keydown.
+    const abortController = new AbortController();
+    if (rootElement.closest("button")) {
+      rootElement.addEventListener(
+        "keydown",
+        (event) => {
+          if (event.code === "Space") {
+            editor.update(() => {
+              const selection = $getSelection();
+
+              if ($isRangeSelection(selection)) {
+                selection.insertText(" ");
+              }
+            });
+
+            event.preventDefault();
+          }
+        },
+        { signal: abortController.signal }
+      );
+
+      // Some controls like Tab and TabTrigger intercept arrow keys for navigation.
+      // Prevent propagation to avoid conflicts with Lexical's default behavior.
+      rootElement.addEventListener(
+        "keydown",
+        (event) => {
+          if (["ArrowLeft", "ArrowRight"].includes(event.code)) {
+            event.stopPropagation();
+          }
+        },
+        { signal: abortController.signal }
+      );
     }
-    if (rootElement) {
-      rootElement.contentEditable = "true";
-    }
+
+    rootElement.contentEditable = "true";
 
     editor.setRootElement(rootElement);
-  }, [editor]);
+
+    // Must be done after 'setRootElement' to avoid Lexical's default behavior
+    // white-space affects "text-wrap", remove it and use "white-space-collapse" instead
+    rootElement.style.removeProperty("white-space");
+    rootElement.style.setProperty("white-space-collapse", "pre-wrap");
+
+    if (placeholder !== undefined) {
+      rootElement.style.setProperty(
+        editingPlaceholderVariable,
+        `'${placeholder.replaceAll("'", "\\'")}'`
+      );
+    }
+
+    return () => {
+      abortController.abort();
+    };
+  }, [editor, placeholder]);
 
   return renderComponentWithRef(ref);
 };
@@ -212,19 +277,26 @@ const $indexesWithinAncestors = computed(
 );
 
 const useInstanceProps = (instanceSelector: InstanceSelector) => {
-  const instanceSelectorKey = JSON.stringify(instanceSelector);
+  const instanceKey = getInstanceKey(instanceSelector);
   const [instanceId] = instanceSelector;
   const $instancePropsObject = useMemo(() => {
     return computed(
-      [$propValuesByInstanceSelectorWithMemoryProps, $indexesWithinAncestors],
-      (propValuesByInstanceSelector, indexesWithinAncestors) => {
+      [
+        $propValuesByInstanceSelectorWithMemoryProps,
+        $instances,
+        $indexesWithinAncestors,
+      ],
+      (propValuesByInstanceSelector, instances, indexesWithinAncestors) => {
         const instancePropsObject: Record<Prop["name"], unknown> = {};
+        const tag = instances.get(instanceId)?.tag;
+        if (tag !== undefined) {
+          instancePropsObject[tagProperty] = tag;
+        }
         const index = indexesWithinAncestors.get(instanceId);
         if (index !== undefined) {
-          instancePropsObject[indexAttribute] = index.toString();
+          instancePropsObject[indexProperty] = index.toString();
         }
-        const instanceProps =
-          propValuesByInstanceSelector.get(instanceSelectorKey);
+        const instanceProps = propValuesByInstanceSelector.get(instanceKey);
         if (instanceProps) {
           for (const [name, value] of instanceProps) {
             instancePropsObject[name] = value;
@@ -233,7 +305,7 @@ const useInstanceProps = (instanceSelector: InstanceSelector) => {
         return instancePropsObject;
       }
     );
-  }, [instanceSelectorKey, instanceId]);
+  }, [instanceKey, instanceId]);
   const instancePropsObject = useStore($instancePropsObject);
   return instancePropsObject;
 };
@@ -306,12 +378,41 @@ const getTextContent = (instanceProps: Record<string, unknown>) => {
   return value as ReactNode;
 };
 
+const getEditableComponentPlaceholder = (
+  instance: Instance,
+  instanceSelector: InstanceSelector,
+  instances: Instances,
+  metas: Map<string, WsComponentMeta>,
+  mode: "editing" | "editable"
+) => {
+  const meta = metas.get(instance.component);
+  if (meta?.placeholder === undefined) {
+    return;
+  }
+
+  const isContentBlockChild =
+    undefined !== findBlockSelector(instanceSelector, instances);
+
+  const isParagraph = instance.component === "Paragraph";
+
+  if (isParagraph && isContentBlockChild) {
+    return mode === "editing"
+      ? "Write something or press '/' for commands..."
+      : // The paragraph contains only an "editing" placeholder within the content block.
+        undefined;
+  }
+
+  return meta.placeholder;
+};
+
 export const WebstudioComponentCanvas = forwardRef<
   HTMLElement,
   WebstudioComponentProps
 >(({ instance, instanceSelector, components, ...restProps }, ref) => {
   const instanceId = instance.id;
   const instances = useStore($instances);
+  const allProps = useStore($props);
+  const metas = useStore($registeredComponentMetas);
 
   const textEditingInstanceSelector = useStore($textEditingInstanceSelector);
 
@@ -394,17 +495,35 @@ export const WebstudioComponentCanvas = forwardRef<
     return <></>;
   }
 
+  if (instance.component === blockComponent) {
+    Component = Block;
+  }
+
+  if (instance.component === blockTemplateComponent) {
+    Component = BlockTemplate;
+  }
+
+  const mergedProps = mergeProps(restProps, instanceProps, "delete");
+
   const props: {
     [componentAttribute]: string;
     [idAttribute]: string;
+    [selectorIdAttribute]: string;
   } & Record<string, unknown> = {
-    ...mergeProps(restProps, instanceProps, "delete"),
+    ...mergedProps,
     // current props should override bypassed from parent
     // important for data-ws-* props
     tabIndex: 0,
     [selectorIdAttribute]: instanceSelector.join(","),
     [componentAttribute]: instance.component,
     [idAttribute]: instance.id,
+    [editablePlaceholderAttribute]: getEditableComponentPlaceholder(
+      instance,
+      instanceSelector,
+      instances,
+      metas,
+      "editable"
+    ),
   };
 
   // React ignores defaultValue changes after first render.
@@ -421,52 +540,60 @@ export const WebstudioComponentCanvas = forwardRef<
   );
 
   if (
-    areInstanceSelectorsEqual(textEditingInstanceSelector, instanceSelector) ===
-    false
+    areInstanceSelectorsEqual(
+      textEditingInstanceSelector?.selector,
+      instanceSelector
+    ) === false
   ) {
     initialContentEditableContent.current = children;
     return instanceElement;
   }
 
   return (
-    <Suspense fallback={instanceElement}>
-      <TextEditor
-        rootInstanceSelector={instanceSelector}
-        instances={instances}
-        contentEditable={
-          <ContentEditable
-            renderComponentWithRef={(elementRef) => (
-              <Component {...props} ref={mergeRefs(ref, elementRef)}>
-                {initialContentEditableContent.current}
-              </Component>
-            )}
-          />
-        }
-        onChange={(instancesList) => {
-          serverSyncStore.createTransaction([$instances], (instances) => {
-            const deletedTreeIds = findTreeInstanceIds(instances, instance.id);
-            for (const updatedInstance of instancesList) {
-              instances.set(updatedInstance.id, updatedInstance);
-              // exclude reused instances
-              deletedTreeIds.delete(updatedInstance.id);
-            }
-            for (const instanceId of deletedTreeIds) {
-              instances.delete(instanceId);
-            }
-          });
-        }}
-        onSelectInstance={(instanceId) => {
-          const instances = $instances.get();
-          const newSelectedSelector = getInstanceSelector(
-            instances,
+    <TextEditor
+      rootInstanceSelector={instanceSelector}
+      instances={instances}
+      props={allProps}
+      contentEditable={
+        <ContentEditable
+          placeholder={getEditableComponentPlaceholder(
+            instance,
             instanceSelector,
-            instanceId
-          );
-          $textEditingInstanceSelector.set(undefined);
-          $selectedInstanceSelector.set(newSelectedSelector);
-        }}
-      />
-    </Suspense>
+            instances,
+            metas,
+            "editing"
+          )}
+          renderComponentWithRef={(elementRef) => (
+            <Component {...props} ref={mergeRefs(ref, elementRef)}>
+              {initialContentEditableContent.current}
+            </Component>
+          )}
+        />
+      }
+      onChange={(instancesList) => {
+        serverSyncStore.createTransaction([$instances], (instances) => {
+          const deletedTreeIds = findTreeInstanceIds(instances, instance.id);
+          for (const updatedInstance of instancesList) {
+            instances.set(updatedInstance.id, updatedInstance);
+            // exclude reused instances
+            deletedTreeIds.delete(updatedInstance.id);
+          }
+          for (const instanceId of deletedTreeIds) {
+            instances.delete(instanceId);
+          }
+        });
+      }}
+      onSelectInstance={(instanceId) => {
+        const instances = $instances.get();
+        const newSelectedSelector = getInstanceSelector(
+          instances,
+          instanceSelector,
+          instanceId
+        );
+        $textEditingInstanceSelector.set(undefined);
+        selectInstance(newSelectedSelector);
+      }}
+    />
   );
 });
 
@@ -481,6 +608,7 @@ export const WebstudioComponentPreview = forwardRef<
     ...mergeProps(restProps, instanceProps, "merge"),
     [idAttribute]: instance.id,
     [componentAttribute]: instance.component,
+    [selectorIdAttribute]: instanceSelector.join(","),
   };
   if (show === false) {
     return <></>;
@@ -518,7 +646,16 @@ export const WebstudioComponentPreview = forwardRef<
     return <></>;
   }
 
-  const Component = components.get(instance.component);
+  let Component = components.get(instance.component);
+
+  if (instance.component === blockComponent) {
+    Component = Block;
+  }
+
+  if (instance.component === blockTemplateComponent) {
+    Component = BlockTemplate;
+  }
+
   if (Component === undefined) {
     return <></>;
   }

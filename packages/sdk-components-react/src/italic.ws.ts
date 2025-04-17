@@ -5,22 +5,22 @@ import {
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-import { i } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { i } from "@webstudio-is/sdk/normalize.css";
 import { props } from "./__generated__/italic.props";
 
 const presetStyle = {
   i: [
     ...i,
     {
-      property: "fontStyle",
+      property: "font-style",
       value: { type: "keyword", value: "italic" },
     },
   ],
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  type: "rich-text-child",
+  type: "container",
   label: "Italic Text",
   icon: TextItalicIcon,
   states: defaultStates,

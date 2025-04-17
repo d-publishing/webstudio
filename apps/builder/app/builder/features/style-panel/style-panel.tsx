@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { computed, type WritableAtom } from "nanostores";
+import { useStore } from "@nanostores/react";
 import {
   theme,
   Box,
@@ -5,60 +8,123 @@ import {
   Text,
   Separator,
   ScrollArea,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  IconButton,
+  DropdownMenuContent,
+  DropdownMenuRadioItem,
+  MenuCheckedIcon,
+  DropdownMenuRadioGroup,
+  rawTheme,
+  Kbd,
+  Flex,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
 } from "@webstudio-is/design-system";
-import type { Instance } from "@webstudio-is/sdk";
-import { useStore } from "@nanostores/react";
-import { computed } from "nanostores";
-import type { htmlTags as HtmlTag } from "html-tags";
-
-import { useStyleData } from "./shared/use-style-data";
-
-import { StyleSourcesSection } from "./style-source-section";
-import { $selectedInstanceRenderState } from "~/shared/nano-states";
-import {
-  $selectedInstanceIntanceToTag,
-  $selectedInstanceSelector,
-} from "~/shared/nano-states";
-import { sections } from "./sections";
-import { useParentStyle } from "./parent-style";
-import type { StyleInfo } from "./shared/style-info";
 import { toValue } from "@webstudio-is/css-engine";
+import { EllipsesIcon } from "@webstudio-is/icons";
+import { $selectedInstanceRenderState } from "~/shared/nano-states";
+import { $selectedInstance } from "~/shared/awareness";
+import { CollapsibleProvider } from "~/builder/shared/collapsible-section";
+import {
+  $settings,
+  getSetting,
+  setSetting,
+  type Settings,
+} from "~/builder/shared/client-settings";
+import { sections } from "./sections";
+import { StyleSourcesSection } from "./style-source-section";
+import { $instanceTags, useParentComputedStyleDecl } from "./shared/model";
 
 const $selectedInstanceTag = computed(
-  [$selectedInstanceSelector, $selectedInstanceIntanceToTag],
-  (instanceSelector, instanceToTag) => {
-    if (instanceSelector === undefined || instanceToTag === undefined) {
+  [$selectedInstance, $instanceTags],
+  (selectedInstance, instanceTags) => {
+    if (selectedInstance === undefined) {
       return;
     }
-    return instanceToTag.get(instanceSelector[0]);
+    return instanceTags.get(selectedInstance.id);
   }
 );
 
-const shouldRenderCategory = (
-  category: string,
-  parentStyle: StyleInfo,
-  tag: undefined | HtmlTag
-) => {
-  switch (category) {
-    case "flexChild":
-      return toValue(parentStyle.display?.value).includes("flex");
-    case "listItem":
-      return tag === "ul" || tag === "ol" || tag === "li";
-  }
-  return true;
+export const ModeMenu = () => {
+  const value = getSetting("stylePanelMode");
+  const [focusedValue, setFocusedValue] = useState<string>(value);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton>
+          <EllipsesIcon />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        sideOffset={Number.parseFloat(rawTheme.spacing[5])}
+        css={{ width: theme.spacing[26] }}
+      >
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(value) => {
+            setSetting("stylePanelMode", value as Settings["stylePanelMode"]);
+          }}
+        >
+          <DropdownMenuRadioItem
+            value="default"
+            icon={<MenuCheckedIcon />}
+            onFocus={() => setFocusedValue("default")}
+          >
+            Default
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem
+            value="focus"
+            icon={<MenuCheckedIcon />}
+            onFocus={() => setFocusedValue("focus")}
+          >
+            <Flex justify="between" grow>
+              <Text variant="labelsTitleCase">Focus mode</Text>
+              <Kbd value={["alt", "shift", "s"]} />
+            </Flex>
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem
+            value="advanced"
+            icon={<MenuCheckedIcon />}
+            onFocus={() => setFocusedValue("advanced")}
+          >
+            <Flex justify="between" grow>
+              <Text variant="labelsTitleCase">Advanced mode</Text>
+              <Kbd value={["alt", "shift", "a"]} />
+            </Flex>
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+
+        {focusedValue === "default" && (
+          <DropdownMenuItem hint>
+            All sections are open by default.
+          </DropdownMenuItem>
+        )}
+        {focusedValue === "focus" && (
+          <DropdownMenuItem hint>
+            Only one section is open at a time.
+          </DropdownMenuItem>
+        )}
+        {focusedValue === "advanced" && (
+          <DropdownMenuItem hint>Advanced section only.</DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 };
 
-type StylePanelProps = {
-  selectedInstance: Instance;
-};
-
-export const StylePanel = ({ selectedInstance }: StylePanelProps) => {
-  const { currentStyle, setProperty, deleteProperty, createBatchUpdate } =
-    useStyleData(selectedInstance);
-
+export const StylePanel = ({
+  $styleSourceInputElement,
+}: {
+  $styleSourceInputElement: WritableAtom<HTMLInputElement | undefined>;
+}) => {
+  const { stylePanelMode } = useStore($settings);
   const selectedInstanceRenderState = useStore($selectedInstanceRenderState);
-  const selectedInstanceTag = useStore($selectedInstanceTag);
-  const parentStyle = useParentStyle();
+  const tag = useStore($selectedInstanceTag);
+  const display = useParentComputedStyleDecl("display");
+  const displayValue = toValue(display.computedValue);
 
   // If selected instance is not rendered on the canvas,
   // style panel will not work, because it needs the element in DOM in order to work.
@@ -76,29 +142,45 @@ export const StylePanel = ({ selectedInstance }: StylePanelProps) => {
   const all = [];
 
   for (const [category, { Section }] of sections.entries()) {
-    if (shouldRenderCategory(category, parentStyle, selectedInstanceTag)) {
-      all.push(
-        <Section
-          key={category}
-          setProperty={setProperty}
-          deleteProperty={deleteProperty}
-          createBatchUpdate={createBatchUpdate}
-          currentStyle={currentStyle}
-        />
-      );
+    // In advanced mode we only need to show advanced panel
+    if (stylePanelMode === "advanced" && category !== "advanced") {
+      continue;
     }
+    // show flex child UI only when parent is flex or inline-flex
+    if (category === "flexChild" && displayValue.includes("flex") === false) {
+      continue;
+    }
+    // allow customizing list item type only for list and list item
+    if (
+      category === "listItem" &&
+      tag !== "ul" &&
+      tag !== "ol" &&
+      tag !== "li"
+    ) {
+      continue;
+    }
+    all.push(<Section key={category} />);
   }
 
   return (
     <>
-      <Box css={{ px: theme.spacing[9], pb: theme.spacing[9] }}>
-        <Text css={{ py: theme.spacing[7] }} variant="titles">
+      <Box css={{ padding: theme.panel.padding }}>
+        <Text variant="titles" css={{ paddingBlock: theme.panel.paddingBlock }}>
           Style Sources
         </Text>
-        <StyleSourcesSection />
+        <StyleSourcesSection
+          $styleSourceInputElement={$styleSourceInputElement}
+        />
       </Box>
       <Separator />
-      <ScrollArea>{all}</ScrollArea>
+      <ScrollArea>
+        <CollapsibleProvider
+          accordion={stylePanelMode === "focus"}
+          initialOpen={stylePanelMode === "focus" ? "Layout" : "*"}
+        >
+          {all}
+        </CollapsibleProvider>
+      </ScrollArea>
     </>
   );
 };

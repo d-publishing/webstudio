@@ -1,8 +1,4 @@
-import { z } from "zod";
 import { nanoid } from "nanoid";
-import { titleCase } from "title-case";
-import { noCase } from "change-case";
-import type { Simplify } from "type-fest";
 import type {
   Instance,
   Prop,
@@ -12,138 +8,14 @@ import type {
   Breakpoint,
   DataSource,
   WebstudioFragment,
+  EmbedTemplateVariable,
+  WsEmbedTemplate,
+  WsComponentMeta,
 } from "@webstudio-is/sdk";
 import {
   encodeDataSourceVariable,
   transpileExpression,
 } from "@webstudio-is/sdk";
-import { StyleValue, type StyleProperty } from "@webstudio-is/css-engine";
-import type { WsComponentMeta } from "./components/component-meta";
-
-const EmbedTemplateText = z.object({
-  type: z.literal("text"),
-  value: z.string(),
-  placeholder: z.boolean().optional(),
-});
-
-type EmbedTemplateText = z.infer<typeof EmbedTemplateText>;
-
-const EmbedTemplateExpression = z.object({
-  type: z.literal("expression"),
-  value: z.string(),
-});
-
-type EmbedTemplateExpression = z.infer<typeof EmbedTemplateExpression>;
-
-const EmbedTemplateVariable = z.object({
-  alias: z.optional(z.string()),
-  initialValue: z.unknown(),
-});
-
-type EmbedTemplateVariable = z.infer<typeof EmbedTemplateVariable>;
-
-export const EmbedTemplateProp = z.union([
-  z.object({
-    type: z.literal("number"),
-    name: z.string(),
-    value: z.number(),
-  }),
-  z.object({
-    type: z.literal("string"),
-    name: z.string(),
-    value: z.string(),
-  }),
-  z.object({
-    type: z.literal("boolean"),
-    name: z.string(),
-    value: z.boolean(),
-  }),
-  z.object({
-    type: z.literal("string[]"),
-    name: z.string(),
-    value: z.array(z.string()),
-  }),
-  z.object({
-    type: z.literal("json"),
-    name: z.string(),
-    value: z.unknown(),
-  }),
-  z.object({
-    type: z.literal("expression"),
-    name: z.string(),
-    code: z.string(),
-  }),
-  z.object({
-    type: z.literal("parameter"),
-    name: z.string(),
-    variableName: z.string(),
-    variableAlias: z.optional(z.string()),
-  }),
-  z.object({
-    type: z.literal("action"),
-    name: z.string(),
-    value: z.array(
-      z.object({
-        type: z.literal("execute"),
-        args: z.optional(z.array(z.string())),
-        code: z.string(),
-      })
-    ),
-  }),
-]);
-
-export type EmbedTemplateProp = z.infer<typeof EmbedTemplateProp>;
-
-const EmbedTemplateStyleDeclRaw = z.object({
-  // State selector, e.g. :hover
-  state: z.optional(z.string()),
-  property: z.string(),
-  value: StyleValue,
-});
-
-export type EmbedTemplateStyleDecl = Simplify<
-  Omit<z.infer<typeof EmbedTemplateStyleDeclRaw>, "property"> & {
-    property: StyleProperty;
-  }
->;
-
-export const EmbedTemplateStyleDecl =
-  EmbedTemplateStyleDeclRaw as z.ZodType<EmbedTemplateStyleDecl>;
-
-export type EmbedTemplateInstance = {
-  type: "instance";
-  component: string;
-  label?: string;
-  variables?: Record<string, EmbedTemplateVariable>;
-  props?: EmbedTemplateProp[];
-  tokens?: string[];
-  styles?: EmbedTemplateStyleDecl[];
-  children: Array<
-    EmbedTemplateInstance | EmbedTemplateText | EmbedTemplateExpression
-  >;
-};
-
-export const EmbedTemplateInstance: z.ZodType<EmbedTemplateInstance> = z.lazy(
-  () =>
-    z.object({
-      type: z.literal("instance"),
-      component: z.string(),
-      label: z.optional(z.string()),
-      variables: z.optional(z.record(z.string(), EmbedTemplateVariable)),
-      props: z.optional(z.array(EmbedTemplateProp)),
-      tokens: z.optional(z.array(z.string())),
-      styles: z.optional(z.array(EmbedTemplateStyleDecl)),
-      children: WsEmbedTemplate,
-    })
-);
-
-export const WsEmbedTemplate = z.lazy(() =>
-  z.array(
-    z.union([EmbedTemplateInstance, EmbedTemplateText, EmbedTemplateExpression])
-  )
-);
-
-export type WsEmbedTemplate = z.infer<typeof WsEmbedTemplate>;
 
 const getVariablValue = (
   value: EmbedTemplateVariable["initialValue"]
@@ -274,34 +146,6 @@ const createInstancesFromTemplate = (
 
       const styleSourceIds: string[] = [];
 
-      // convert tokens into style sources and styles
-      if (item.tokens) {
-        const meta = metas.get(item.component);
-        if (meta?.presetTokens) {
-          for (const name of item.tokens) {
-            const tokenValue = meta.presetTokens[name];
-            if (tokenValue) {
-              const styleSourceId = `${item.component}:${name}`;
-              styleSourceIds.push(styleSourceId);
-              styleSources.push({
-                type: "token",
-                id: styleSourceId,
-                name: titleCase(noCase(name)),
-              });
-              for (const styleDecl of tokenValue.styles) {
-                styles.push({
-                  breakpointId: defaultBreakpointId,
-                  styleSourceId,
-                  state: styleDecl.state,
-                  property: styleDecl.property,
-                  value: styleDecl.value,
-                });
-              }
-            }
-          }
-        }
-      }
-
       // populate styles
       if (item.styles) {
         const styleSourceId = generateId();
@@ -385,7 +229,6 @@ const createInstancesFromTemplate = (
 export const generateDataFromEmbedTemplate = (
   treeTemplate: WsEmbedTemplate,
   metas: Map<Instance["component"], WsComponentMeta>,
-  defaultBreakpointId: Breakpoint["id"],
   generateId: () => string = nanoid
 ): WebstudioFragment => {
   const instances: Instance[] = [];
@@ -394,6 +237,7 @@ export const generateDataFromEmbedTemplate = (
   const styleSourceSelections: StyleSourceSelection[] = [];
   const styleSources: StyleSource[] = [];
   const styles: StyleDecl[] = [];
+  const baseBreakpointId = generateId();
 
   const children = createInstancesFromTemplate(
     treeTemplate,
@@ -404,9 +248,17 @@ export const generateDataFromEmbedTemplate = (
     styleSources,
     styles,
     metas,
-    defaultBreakpointId,
+    baseBreakpointId,
     generateId
   );
+  const breakpoints: Breakpoint[] = [];
+  // will be merged into project base breakpoint
+  if (styles.length > 0) {
+    breakpoints.push({
+      id: baseBreakpointId,
+      label: "",
+    });
+  }
 
   return {
     children,
@@ -416,68 +268,8 @@ export const generateDataFromEmbedTemplate = (
     styleSourceSelections,
     styleSources,
     styles,
+    breakpoints,
     assets: [],
-    breakpoints: [],
     resources: [],
   };
-};
-
-const namespaceEmbedTemplateComponents = (
-  template: WsEmbedTemplate,
-  namespace: string,
-  components: Set<EmbedTemplateInstance["component"]>
-): WsEmbedTemplate => {
-  return template.map((item) => {
-    if (item.type === "text") {
-      return item;
-    }
-    if (item.type === "expression") {
-      return item;
-    }
-    if (item.type === "instance") {
-      const prefix = components.has(item.component) ? `${namespace}:` : "";
-      return {
-        ...item,
-        component: `${prefix}${item.component}`,
-        children: namespaceEmbedTemplateComponents(
-          item.children,
-          namespace,
-          components
-        ),
-      };
-    }
-    item satisfies never;
-    throw Error("Impossible case");
-  });
-};
-
-export const namespaceMeta = (
-  meta: WsComponentMeta,
-  namespace: string,
-  components: Set<EmbedTemplateInstance["component"]>
-) => {
-  const newMeta = { ...meta };
-  if (newMeta.requiredAncestors) {
-    newMeta.requiredAncestors = newMeta.requiredAncestors.map((component) =>
-      components.has(component) ? `${namespace}:${component}` : component
-    );
-  }
-  if (newMeta.invalidAncestors) {
-    newMeta.invalidAncestors = newMeta.invalidAncestors.map((component) =>
-      components.has(component) ? `${namespace}:${component}` : component
-    );
-  }
-  if (newMeta.indexWithinAncestor) {
-    newMeta.indexWithinAncestor = components.has(newMeta.indexWithinAncestor)
-      ? `${namespace}:${newMeta.indexWithinAncestor}`
-      : newMeta.indexWithinAncestor;
-  }
-  if (newMeta.template) {
-    newMeta.template = namespaceEmbedTemplateComponents(
-      newMeta.template,
-      namespace,
-      components
-    );
-  }
-  return newMeta;
 };

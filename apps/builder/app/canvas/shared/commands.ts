@@ -2,12 +2,14 @@ import { FORMAT_TEXT_COMMAND } from "lexical";
 import { TOGGLE_LINK_COMMAND } from "@lexical/link";
 import { createCommandsEmitter } from "~/shared/commands-emitter";
 import { getElementByInstanceSelector } from "~/shared/dom-utils";
-import { findClosestEditableInstanceSelector } from "~/shared/instance-utils";
+import { findAllEditableInstanceSelector } from "~/shared/instance-utils";
 import {
   $instances,
+  $props,
   $registeredComponentMetas,
   $selectedInstanceSelector,
   $textEditingInstanceSelector,
+  $textToolbar,
 } from "~/shared/nano-states";
 import {
   CLEAR_FORMAT_COMMAND,
@@ -15,14 +17,29 @@ import {
   getActiveEditor,
   hasSelectionFormat,
 } from "../features/text-editor/toolbar-connector";
+import { selectInstance } from "~/shared/awareness";
+import { isDescendantOrSelf, type InstanceSelector } from "~/shared/tree-utils";
+import { deleteSelectedInstance } from "~/builder/shared/commands";
+import { findClosestRichText } from "~/shared/content-model";
 
 export const { emitCommand, subscribeCommands } = createCommandsEmitter({
   source: "canvas",
   externalCommands: ["clickCanvas"],
   commands: [
     {
+      name: "deleteInstanceCanvas",
+      defaultHotkeys: ["backspace", "delete"],
+      disableHotkeyOutsideApp: true,
+      // We are not disabling "Backspace" or "Delete" on the canvas. This is the main reason we have separate functions: deleteInstanceCanvas and deleteInstanceBuilder.
+      disableOnInputLikeControls: false,
+      handler: deleteSelectedInstance,
+    },
+
+    {
       name: "editInstanceText",
+      hidden: true,
       defaultHotkeys: ["enter"],
+      disableOnInputLikeControls: true,
       // builder invokes command with custom hotkey setup
       disableHotkeyOutsideApp: true,
       handler: () => {
@@ -30,14 +47,43 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
         if (selectedInstanceSelector === undefined) {
           return;
         }
-        const editableInstanceSelector = findClosestEditableInstanceSelector(
-          selectedInstanceSelector,
-          $instances.get(),
-          $registeredComponentMetas.get()
-        );
-        if (editableInstanceSelector === undefined) {
+
+        if (
+          isDescendantOrSelf(
+            $textEditingInstanceSelector.get()?.selector ?? [],
+            selectedInstanceSelector
+          )
+        ) {
+          // already in text editing mode
           return;
         }
+
+        let editableInstanceSelector = findClosestRichText({
+          instanceSelector: selectedInstanceSelector,
+          instances: $instances.get(),
+          props: $props.get(),
+          metas: $registeredComponentMetas.get(),
+        });
+
+        if (editableInstanceSelector === undefined) {
+          const selectors: InstanceSelector[] = [];
+
+          findAllEditableInstanceSelector({
+            instanceSelector: selectedInstanceSelector,
+            instances: $instances.get(),
+            props: $props.get(),
+            metas: $registeredComponentMetas.get(),
+            results: selectors,
+          });
+
+          if (selectors.length === 0) {
+            $textEditingInstanceSelector.set(undefined);
+            return;
+          }
+
+          editableInstanceSelector = selectors[0];
+        }
+
         const element = getElementByInstanceSelector(editableInstanceSelector);
         if (element === undefined) {
           return;
@@ -45,34 +91,51 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
         // When an event is triggered from the Builder,
         // the canvas element may be unfocused, so it's important to focus the element on the canvas.
         element.focus();
-        $selectedInstanceSelector.set(editableInstanceSelector);
-        $textEditingInstanceSelector.set(editableInstanceSelector);
+
+        selectInstance(editableInstanceSelector);
+
+        $textEditingInstanceSelector.set({
+          selector: editableInstanceSelector,
+          reason: "enter",
+        });
       },
     },
 
     {
       name: "escapeSelection",
+      hidden: true,
       defaultHotkeys: ["escape"],
+      disableOnInputLikeControls: true,
       // reset selection for canvas, but not for the builder
       disableHotkeyOutsideApp: true,
       handler: () => {
         const selectedInstanceSelector = $selectedInstanceSelector.get();
         const textEditingInstanceSelector = $textEditingInstanceSelector.get();
-        if (selectedInstanceSelector === undefined) {
+        const textToolbar = $textToolbar.get();
+
+        // close text toolbar first without exiting text editing mode
+        if (textToolbar) {
+          $textToolbar.set(undefined);
           return;
         }
+
         // exit text editing mode first without unselecting instance
         if (textEditingInstanceSelector) {
           $textEditingInstanceSelector.set(undefined);
           return;
         }
-        // unselect both instance and style source
-        $selectedInstanceSelector.set(undefined);
+
+        if (selectedInstanceSelector) {
+          // unselect both instance and style source
+          selectInstance(undefined);
+          return;
+        }
       },
     },
 
     {
       name: "formatBold",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(FORMAT_TEXT_COMMAND, "bold");
@@ -83,6 +146,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatItalic",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(FORMAT_TEXT_COMMAND, "italic");
@@ -91,6 +155,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatSuperscript",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(FORMAT_TEXT_COMMAND, "superscript");
@@ -103,6 +168,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatSubscript",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(FORMAT_TEXT_COMMAND, "subscript");
@@ -115,6 +181,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatLink",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         if (hasSelectionFormat("link")) {
@@ -127,6 +194,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatSpan",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(TOGGLE_SPAN_COMMAND, undefined);
@@ -135,6 +203,7 @@ export const { emitCommand, subscribeCommands } = createCommandsEmitter({
     },
     {
       name: "formatClear",
+      hidden: true,
       handler: () => {
         const editor = getActiveEditor();
         editor?.dispatchCommand(CLEAR_FORMAT_COMMAND, undefined);

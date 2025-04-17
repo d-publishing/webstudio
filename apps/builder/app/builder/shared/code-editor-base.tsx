@@ -2,7 +2,6 @@ import {
   useEffect,
   useRef,
   type ReactNode,
-  useState,
   forwardRef,
   type ComponentProps,
   type RefObject,
@@ -26,28 +25,35 @@ import {
   historyKeymap,
   indentWithTab,
 } from "@codemirror/commands";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { tags } from "@lezer/highlight";
+import { foldGutter, syntaxHighlighting } from "@codemirror/language";
 import {
   theme,
   textVariants,
   css,
   SmallIconButton,
-  Dialog,
-  DialogTrigger,
-  DialogContent,
   Grid,
-  DialogTitle,
-  Button,
-  DialogClose,
   Flex,
+  rawTheme,
+  globalCss,
+  Kbd,
+  Text,
+  FloatingPanel,
 } from "@webstudio-is/design-system";
-import { CrossIcon, MaximizeIcon, MinimizeIcon } from "@webstudio-is/icons";
+import { MaximizeIcon } from "@webstudio-is/icons";
+import { ChevronDownIcon, ChevronRightIcon } from "@webstudio-is/icons/svg";
+import { solarizedLight } from "./code-highlight";
+
+// This undocumented flag is required to keep contenteditable fields editable after the first activation of EditorView.
+// To reproduce the issue, open any Binding dialog and then try to edit a Navigation Item in the Navigation menu.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-expect-error
+EditorView.EDIT_CONTEXT = false;
 
 const ExternalChange = Annotation.define<boolean>();
 
 const minHeightVar = "--ws-code-editor-min-height";
 const maxHeightVar = "--ws-code-editor-max-height";
+const maximizeIconVisibilityVar = "--ws-code-editor-maximize-icon-visibility";
 
 export const getMinMaxHeightVars = ({
   minHeight,
@@ -60,25 +66,31 @@ export const getMinMaxHeightVars = ({
   [maxHeightVar]: maxHeight,
 });
 
+const globalStyles = globalCss({
+  "fieldset[disabled] .cm-editor": {
+    opacity: 0.3,
+  },
+});
+
 const editorContentStyle = css({
   ...textVariants.mono,
   // fit editor into parent if stretched
   display: "flex",
+  position: "relative",
   minHeight: 0,
   boxSizing: "border-box",
   color: theme.colors.foregroundMain,
   borderRadius: theme.borderRadius[4],
   border: `1px solid ${theme.colors.borderMain}`,
   background: theme.colors.backgroundControls,
-  paddingTop: 6,
-  paddingBottom: 4,
+  paddingTop: 4,
+  paddingBottom: 2,
   paddingRight: theme.spacing[2],
   paddingLeft: theme.spacing[3],
   // required to support copying selected text
   userSelect: "text",
   "&:focus-within": {
     borderColor: theme.colors.borderFocus,
-    outline: `1px solid ${theme.colors.borderFocus}`,
   },
   '&[data-invalid="true"]': {
     borderColor: theme.colors.borderDestructiveMain,
@@ -106,43 +118,99 @@ const editorContentStyle = css({
     minHeight: `var(${minHeightVar}, auto)`,
     maxHeight: `var(${maxHeightVar}, none)`,
   },
+  ".cm-lintRange-error": {
+    textDecoration: "underline wavy red",
+    backgroundColor: "rgba(255, 0, 0, 0.1)",
+  },
+  ".cm-lintRange-warning": {
+    textDecoration: "underline wavy orange",
+    backgroundColor: "rgba(255, 0, 0, 0.1)",
+  },
+  ".cm-gutters": {
+    backgroundColor: "transparent",
+    border: 0,
+  },
 });
 
-// https://thememirror.net/clouds
-const highlightStyle = HighlightStyle.define([
-  // darker comment variant from https://github.com/vadimdemedes/thememirror/blob/main/source/themes/ayu-light.ts#L17-L20
-  {
-    tag: tags.comment,
-    color: "#787b8099",
+const shortcutStyle = css({
+  position: "absolute",
+  left: 0,
+  bottom: 0,
+  width: "100%",
+  paddingInline: theme.spacing[3],
+  background: "oklch(100% 0 0 / 50%)",
+  zIndex: 1,
+  pointerEvents: "none",
+});
+
+const autocompletionTooltipTheme = EditorView.theme({
+  ".cm-tooltip.cm-tooltip-autocomplete": {
+    ...textVariants.mono,
+    border: "none",
+    backgroundColor: "transparent",
+    // override none set on body by radix popover
+    pointerEvents: "auto",
   },
-  {
-    tag: [tags.string, tags.special(tags.brace), tags.regexp],
-    color: "#5D90CD",
+  ".cm-tooltip.cm-tooltip-autocomplete ul": {
+    minWidth: "160px",
+    maxWidth: "260px",
+    width: "max-content",
+    boxSizing: "border-box",
+    borderRadius: rawTheme.borderRadius[6],
+    backgroundColor: rawTheme.colors.backgroundMenu,
+    border: `1px solid ${rawTheme.colors.borderMain}`,
+    boxShadow: `${rawTheme.shadows.menuDropShadow}, inset 0 0 0 1px ${rawTheme.colors.borderMenuInner}`,
+    padding: rawTheme.spacing[3],
   },
-  {
-    tag: [tags.number, tags.bool, tags.null],
-    color: "#46A609",
+  ".cm-tooltip.cm-tooltip-autocomplete ul li": {
+    ...textVariants.labelsTitleCase,
+    textTransform: "none",
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    color: rawTheme.colors.foregroundMain,
+    padding: rawTheme.spacing[3],
+    borderRadius: rawTheme.borderRadius[3],
   },
-  {
-    tag: tags.keyword,
-    color: "#AF956F",
+  ".cm-tooltip.cm-tooltip-autocomplete li[aria-selected], .cm-tooltip.cm-tooltip-autocomplete li:hover":
+    {
+      color: rawTheme.colors.foregroundMain,
+      backgroundColor: rawTheme.colors.backgroundItemMenuItemHover,
+    },
+  ".cm-tooltip.cm-tooltip-autocomplete .cm-completionLabel": {
+    flexGrow: 1,
   },
-  {
-    tag: [tags.definitionKeyword, tags.modifier],
-    color: "#C52727",
+  ".cm-tooltip.cm-tooltip-autocomplete .cm-completionDetail": {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    fontStyle: "normal",
+    color: rawTheme.colors.foregroundSubtle,
   },
-  {
-    tag: [tags.angleBracket, tags.tagName, tags.attributeName],
-    color: "#606060",
+});
+
+const keyBindings = [
+  ...defaultKeymap.filter((binding) => {
+    // We are redefining it later and CodeMirror won't take an override
+    return binding.key !== "Mod-Enter";
+  }),
+  ...historyKeymap,
+  indentWithTab,
+];
+
+export const foldGutterExtension = foldGutter({
+  markerDOM: (isOpen) => {
+    const div = document.createElement("div");
+    div.style.width = "16px";
+    div.style.height = "16px";
+    div.style.cursor = "pointer";
+    div.innerHTML = isOpen ? ChevronDownIcon : ChevronRightIcon;
+    return div;
   },
-  {
-    tag: tags.self,
-    color: "#000",
-  },
-]);
+});
 
 export type EditorApi = {
   replaceSelection: (string: string) => void;
+  focus: () => void;
 };
 
 type EditorContentProps = {
@@ -151,9 +219,10 @@ type EditorContentProps = {
   readOnly?: boolean;
   autoFocus?: boolean;
   invalid?: boolean;
+  showShortcuts?: boolean;
   value: string;
-  onChange: (newValue: string) => void;
-  onBlur?: (event: FocusEvent) => void;
+  onChange: (value: string) => void;
+  onChangeComplete: (value: string) => void;
 };
 
 export const EditorContent = ({
@@ -162,20 +231,47 @@ export const EditorContent = ({
   readOnly = false,
   autoFocus = false,
   invalid = false,
+  showShortcuts = false,
   value,
   onChange,
-  onBlur,
+  onChangeComplete,
 }: EditorContentProps) => {
-  const editorRef = useRef<null | HTMLDivElement>(null);
-  const viewRef = useRef<undefined | EditorView>();
+  globalStyles();
+
+  const editorRef = useRef<HTMLDivElement>(null);
+  const viewRef = useRef<undefined | EditorView>(undefined);
 
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const onBlurRef = useRef(onBlur);
-  onBlurRef.current = onBlur;
+  const onChangeCompleteRef = useRef(onChangeComplete);
+  onChangeCompleteRef.current = onChangeComplete;
+
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    document.addEventListener(
+      // https://github.com/radix-ui/primitives/blob/dac4fd8ab0c1974020e316c865db258ab10d2279/packages/react/dismissable-layer/src/DismissableLayer.tsx#L14
+      "dismissableLayer.pointerDownOutside",
+      (event) => {
+        if (
+          event.target instanceof Element &&
+          // Prevent radix dialogs and popups from closing when clicking on the editor's autocomplete items
+          event.target.closest(".cm-tooltip.cm-tooltip-autocomplete")
+        ) {
+          event.preventDefault();
+        }
+      },
+      {
+        capture: true,
+        signal: abortController.signal,
+      }
+    );
+    return () => {
+      abortController.abort();
+    };
+  }, []);
 
   // setup editor
-
   useEffect(() => {
     if (editorRef.current === null) {
       return;
@@ -184,13 +280,17 @@ export const EditorContent = ({
       doc: "",
       parent: editorRef.current,
     });
-    if (autoFocus) {
-      view.focus();
-    }
+
     viewRef.current = view;
     return () => {
       view.destroy();
     };
+  }, []);
+
+  useEffect(() => {
+    if (autoFocus) {
+      viewRef.current?.focus();
+    }
   }, [autoFocus]);
 
   // update extensions whenever variables data is changed
@@ -200,14 +300,35 @@ export const EditorContent = ({
     if (view === undefined) {
       return;
     }
+    const hasDisabledFieldset =
+      editorRef.current?.closest("fieldset[disabled]");
+
     view.dispatch({
       effects: StateEffect.reconfigure.of([
         ...extensions,
+        ...(hasDisabledFieldset ? [EditorView.editable.of(false)] : []),
+        autocompletionTooltipTheme,
         history(),
         drawSelection(),
         dropCursor(),
-        syntaxHighlighting(highlightStyle, { fallback: true }),
-        keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+        syntaxHighlighting(solarizedLight, { fallback: true }),
+        keymap.of([
+          ...keyBindings,
+          {
+            key: "Mod-Enter",
+            run(view) {
+              onChangeCompleteRef.current(view.state.doc.toString());
+              return true;
+            },
+          },
+          {
+            key: "Mod-s",
+            run(view) {
+              onChangeCompleteRef.current(view.state.doc.toString());
+              return true;
+            },
+          },
+        ]),
         EditorView.lineWrapping,
         EditorView.editable.of(readOnly === false),
         EditorState.readOnly.of(readOnly === true),
@@ -225,8 +346,8 @@ export const EditorContent = ({
           }
         }),
         EditorView.domEventHandlers({
-          blur(event) {
-            onBlurRef.current?.(event);
+          blur() {
+            onChangeCompleteRef.current(view.state.doc.toString());
           },
           cut(event) {
             // prevent catching cut by global copy paste
@@ -250,6 +371,7 @@ export const EditorContent = ({
     if (value === view.state.doc.toString()) {
       return;
     }
+
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: value },
       annotations: [ExternalChange.of(true)],
@@ -262,8 +384,12 @@ export const EditorContent = ({
       if (view === undefined) {
         return;
       }
+
       view.dispatch(view.state.replaceSelection(string));
       view.focus();
+    },
+    focus() {
+      viewRef.current?.focus();
     },
   }));
 
@@ -272,14 +398,21 @@ export const EditorContent = ({
       className={editorContentStyle()}
       data-invalid={invalid}
       ref={editorRef}
-    />
+    >
+      {showShortcuts && (
+        <Flex align="center" justify="end" gap="1" className={shortcutStyle()}>
+          <Text variant="small">Submit</Text>
+          <Kbd value={["meta", "enter"]} />
+        </Flex>
+      )}
+    </div>
   );
 };
 
 const editorDialogControlStyle = css({
   position: "relative",
   "&:hover": {
-    "--ws-code-editor-maximize-icon-visibility": "visible",
+    [maximizeIconVisibilityVar]: "visible",
   },
 });
 
@@ -298,9 +431,10 @@ export const EditorDialogButton = forwardRef<
       icon={<MaximizeIcon />}
       css={{
         position: "absolute",
-        top: 6,
+        top: 4,
         right: 4,
-        visibility: `var(--ws-code-editor-maximize-icon-visibility, hidden)`,
+        visibility: `var(${maximizeIconVisibilityVar}, hidden)`,
+        background: "oklch(100% 0 0 / 50%)",
       }}
     />
   );
@@ -308,36 +442,36 @@ export const EditorDialogButton = forwardRef<
 EditorDialogButton.displayName = "EditorDialogButton";
 
 export const EditorDialog = ({
-  open,
-  onOpenChange,
-  title,
   content,
   children,
+  placement = "center",
+  width = 640,
+  height = 480,
+  ...panelProps
 }: {
-  open?: boolean;
-  onOpenChange?: (newOpen: boolean) => void;
-  title?: ReactNode;
+  title: ReactNode;
   content: ReactNode;
   children: ReactNode;
+  width?: number;
+  height?: number;
+  placement?: ComponentProps<typeof FloatingPanel>["placement"];
+  resize?: ComponentProps<typeof FloatingPanel>["resize"];
+  open?: boolean;
+  onOpenChange?: (newOpen: boolean) => void;
 }) => {
-  const [isMaximized, setIsMaximized] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal={false}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent
-        resize="auto"
-        width={640}
-        height={480}
-        minHeight={240}
-        isMaximized={isMaximized}
-        onInteractOutside={(event) => {
-          event.preventDefault();
-        }}
-      >
+    <FloatingPanel
+      {...panelProps}
+      width={width}
+      height={height}
+      placement={placement}
+      maximizable
+      resize="both"
+      content={
         <Grid
           align="stretch"
           css={{
-            padding: theme.spacing[7],
+            padding: theme.panel.padding,
             height: "100%",
             overflow: "hidden",
             boxSizing: "content-box",
@@ -345,64 +479,9 @@ export const EditorDialog = ({
         >
           {content}
         </Grid>
-        {/* Title is at the end intentionally,
-         * to make the close button last in the tab order
-         */}
-        <DialogTitle
-          draggable
-          suffix={
-            <Flex
-              gap="1"
-              onMouseDown={(event) => {
-                // Prevent dragging dialog
-                event.preventDefault();
-              }}
-            >
-              <Button
-                color="ghost"
-                prefix={isMaximized ? <MinimizeIcon /> : <MaximizeIcon />}
-                aria-label="Expand"
-                onClick={() => setIsMaximized(isMaximized ? false : true)}
-              />
-              <DialogClose asChild>
-                <Button
-                  color="ghost"
-                  prefix={<CrossIcon />}
-                  aria-label="Close"
-                />
-              </DialogClose>
-            </Flex>
-          }
-        >
-          {title}
-        </DialogTitle>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
-export const CodeEditorBase = ({
-  title,
-  open,
-  onOpenChange,
-  ...editorContentProps
-}: EditorContentProps & {
-  title?: ReactNode;
-  open?: boolean;
-  onOpenChange?: (newOpen: boolean) => void;
-}) => {
-  const content = <EditorContent {...editorContentProps} />;
-  return (
-    <EditorDialogControl>
-      {content}
-      <EditorDialog
-        open={open}
-        onOpenChange={onOpenChange}
-        title={title}
-        content={content}
-      >
-        <EditorDialogButton />
-      </EditorDialog>
-    </EditorDialogControl>
+      }
+    >
+      {children}
+    </FloatingPanel>
   );
 };

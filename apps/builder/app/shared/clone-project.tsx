@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useNavigate, useRevalidator } from "@remix-run/react";
 import {
   Box,
   Button,
@@ -13,40 +12,50 @@ import {
   DialogClose,
   Dialog,
   DialogActions,
+  toast,
 } from "@webstudio-is/design-system";
-import { Title, Project } from "@webstudio-is/project";
-import { builderPath } from "~/shared/router-utils";
-import { trpcClient } from "./trpc/trpc-client";
+import { Title, type Project } from "@webstudio-is/project";
+import { nativeClient } from "./trpc/trpc-client";
+import { useEffectEvent } from "./hook-utils/effect-event";
 
 const useCloneProject = ({
   projectId,
-  onOpenChange,
+  onCreate,
+  authToken,
 }: {
   projectId: Project["id"];
-  onOpenChange: (isOpen: boolean) => void;
+  authToken?: string;
+  onCreate: (projectId: Project["id"]) => void;
 }) => {
-  const revalidator = useRevalidator();
-  const navigate = useNavigate();
-  const { send, state } = trpcClient.project.clone.useMutation();
+  const [state, setState] = useState<"idle" | "loading" | "submitting">("idle");
   const [errors, setErrors] = useState<string>();
 
-  const handleSubmit = ({ title }: { title: string }) => {
+  const handleSubmit = async ({ title }: { title: string }) => {
     const parsed = Title.safeParse(title);
     const errors =
       "error" in parsed
-        ? parsed.error.issues.map((issue) => issue.message).join("\n")
+        ? parsed.error?.issues.map((issue) => issue.message).join("\n")
         : undefined;
 
     setErrors(errors);
 
     if (parsed.success) {
-      send({ projectId, title }, (data) => {
-        revalidator.revalidate();
-        if (data?.id) {
-          navigate(builderPath({ projectId: data.id }));
-          onOpenChange(false);
-        }
-      });
+      try {
+        setState("submitting");
+
+        const data = await nativeClient.project.clone.mutate({
+          projectId,
+          title,
+          authToken,
+        });
+
+        setState("idle");
+
+        onCreate(data.id);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unknown error");
+        setState("idle");
+      }
     }
   };
 
@@ -88,7 +97,7 @@ const CloneProjectView = ({
           <Flex
             direction="column"
             css={{
-              px: theme.spacing["9"],
+              px: theme.spacing["7"],
               paddingTop: theme.spacing["5"],
             }}
             gap="1"
@@ -110,7 +119,7 @@ const CloneProjectView = ({
             >
               Clone
             </Button>
-            <DialogClose asChild>
+            <DialogClose>
               <Button color="ghost">Cancel</Button>
             </DialogClose>
           </DialogActions>
@@ -125,14 +134,24 @@ export const CloneProjectDialog = ({
   isOpen,
   project: { id, title },
   onOpenChange,
+  authToken,
+  onCreate,
 }: {
   isOpen: boolean;
-  project: Project;
+  project: Pick<Project, "id" | "title">;
+  authToken?: string;
   onOpenChange: (isOpen: boolean) => void;
+  onCreate: (projectId: Project["id"]) => void;
 }) => {
+  const handleOnCreate = useEffectEvent((projectId: Project["id"]) => {
+    onCreate(projectId);
+    onOpenChange(false);
+  });
+
   const { handleSubmit, errors, state } = useCloneProject({
     projectId: id,
-    onOpenChange,
+    authToken,
+    onCreate: handleOnCreate,
   });
 
   return (

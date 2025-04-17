@@ -1,20 +1,19 @@
-import type { SpaceStyleProperty } from "./types";
-import { PropertyTooltip } from "../../shared/property-name";
-import type { StyleInfo } from "../../shared/style-info";
 import { useState, type ReactElement } from "react";
-import { useModifierKeys } from "../../shared/modifier-keys";
-import { getSpaceModifiersGroup } from "../shared/scrub";
-import type { CreateBatchUpdate } from "../../shared/use-style-data";
+import { deleteProperty } from "../../shared/use-style-data";
+import { Tooltip } from "@webstudio-is/design-system";
+import { PropertyInfo } from "../../property-label";
+import { useComputedStyles } from "../../shared/model";
+import type { SpaceStyleProperty } from "./properties";
 
 const sides = {
-  paddingTop: "top",
-  paddingRight: "top",
-  paddingBottom: "bottom",
-  paddingLeft: "left",
-  marginTop: "top",
-  marginRight: "left",
-  marginBottom: "bottom",
-  marginLeft: "right",
+  "padding-top": "top",
+  "padding-right": "top",
+  "padding-bottom": "bottom",
+  "padding-left": "left",
+  "margin-top": "top",
+  "margin-right": "left",
+  "margin-bottom": "bottom",
+  "margin-left": "right",
 } as const;
 
 const propertyContents: {
@@ -24,40 +23,45 @@ const propertyContents: {
 }[] = [
   // Padding
   {
-    properties: ["paddingTop", "paddingBottom"],
+    properties: ["padding-top", "padding-bottom"],
     label: "Vertical Padding",
     description:
       "Defines the space between the content of an element and its top and bottom border. Can affect layout height.",
   },
 
   {
-    properties: ["paddingLeft", "paddingRight"],
+    properties: ["padding-left", "padding-right"],
     label: "Horizontal Padding",
     description:
       "Defines the space between the content of an element and its left and right border. Can affect layout width.",
   },
 
   {
-    properties: ["paddingTop", "paddingBottom", "paddingLeft", "paddingRight"],
+    properties: [
+      "padding-top",
+      "padding-bottom",
+      "padding-left",
+      "padding-right",
+    ],
     label: "Padding",
     description:
       "Defines the space between the content of an element and its border. Can affect layout size.",
   },
   // Margin
   {
-    properties: ["marginTop", "marginBottom"],
+    properties: ["margin-top", "margin-bottom"],
     label: "Vertical Margin",
     description: "Sets the margin at the top and bottom of an element.",
   },
 
   {
-    properties: ["marginLeft", "marginRight"],
+    properties: ["margin-left", "margin-right"],
     label: "Horizontal Margin",
     description: "Sets the margin at the left and right of an element.",
   },
 
   {
-    properties: ["marginTop", "marginBottom", "marginLeft", "marginRight"],
+    properties: ["margin-top", "margin-bottom", "margin-left", "margin-right"],
     label: "Margin",
     description: "Sets the margin of an element.",
   },
@@ -77,22 +81,16 @@ const isSameUnorderedArrays = (
 
 export const SpaceTooltip = ({
   property,
-  style,
   children,
-  createBatchUpdate,
   preventOpen,
 }: {
   property: SpaceStyleProperty;
-  style: StyleInfo;
   children: ReactElement;
-  createBatchUpdate: CreateBatchUpdate;
   preventOpen: boolean;
 }) => {
-  const [open, setOpen] = useState(false);
-
-  const modifiers = useModifierKeys();
-
-  const properties = [...getSpaceModifiersGroup(property, modifiers)];
+  const [isOpen, setIsOpen] = useState(false);
+  const properties = [property];
+  const styles = useComputedStyles(properties);
 
   const propertyContent = propertyContents.find((propertyContent) =>
     isSameUnorderedArrays(propertyContent.properties, properties)
@@ -102,27 +100,39 @@ export const SpaceTooltip = ({
     if (preventOpen && value === true) {
       return;
     }
-    setOpen(value);
+    setIsOpen(value);
   };
 
   return (
-    <PropertyTooltip
-      open={open}
+    <Tooltip
+      open={isOpen}
       onOpenChange={handleOpenChange}
-      properties={properties}
-      style={style}
-      title={propertyContent?.label}
-      description={propertyContent?.description}
       side={sides[property]}
-      onReset={() => {
-        const batch = createBatchUpdate();
-        for (const property of properties) {
-          batch.deleteProperty(property);
-        }
-        batch.publish();
+      // prevent closing tooltip on content click
+      onPointerDown={(event) => event.preventDefault()}
+      triggerProps={{
+        onClick: (event) => {
+          if (event.altKey) {
+            event.preventDefault();
+            deleteProperty(property);
+            return;
+          }
+        },
       }}
+      content={
+        <PropertyInfo
+          title={propertyContent?.label ?? ""}
+          description={propertyContent?.description}
+          styles={styles}
+          onReset={() => {
+            deleteProperty(property);
+            handleOpenChange(false);
+          }}
+        />
+      }
     >
+      {/* @todo show tooltip on focus */}
       <div>{children}</div>
-    </PropertyTooltip>
+    </Tooltip>
   );
 };

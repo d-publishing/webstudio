@@ -1,14 +1,11 @@
 import { CalendarIcon } from "@webstudio-is/icons/svg";
-
 import {
   defaultStates,
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-
-import { time } from "@webstudio-is/react-sdk/css-normalize";
-
+} from "@webstudio-is/sdk";
+import { time } from "@webstudio-is/sdk/normalize.css";
 import { props } from "./__generated__/time.props";
 
 const presetStyle = {
@@ -16,14 +13,13 @@ const presetStyle = {
 } satisfies PresetStyle<"time">;
 
 export const meta: WsComponentMeta = {
-  category: "data",
+  category: "localization",
   type: "container",
   description:
     "Converts machine-readable date and time to a human-readable format.",
   icon: CalendarIcon,
   states: defaultStates,
   presetStyle,
-  order: 4,
 };
 
 export const propsMeta: WsComponentPropsMeta = {

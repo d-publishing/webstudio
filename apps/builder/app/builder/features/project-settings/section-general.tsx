@@ -9,24 +9,28 @@ import {
   Text,
   Separator,
   Button,
-  CheckboxAndLabel,
-  Checkbox,
   css,
   Flex,
   Tooltip,
   InputErrorsTooltip,
   ProBadge,
+  TextArea,
+  IconButton,
 } from "@webstudio-is/design-system";
-import { InfoCircleIcon } from "@webstudio-is/icons";
+import { CopyIcon, InfoCircleIcon } from "@webstudio-is/icons";
+import { Image, wsImageLoader } from "@webstudio-is/image";
+import type { ProjectMeta } from "@webstudio-is/sdk";
 import { ImageControl } from "./image-control";
-import { Image } from "@webstudio-is/image";
-import type { ProjectMeta, CompilerSettings } from "@webstudio-is/sdk";
-import { $assets, $imageLoader, $pages } from "~/shared/nano-states";
-import { useIds } from "~/shared/form-utils";
+import {
+  $assets,
+  $pages,
+  $project,
+  $userPlanFeatures,
+} from "~/shared/nano-states";
 import { serverSyncStore } from "~/shared/sync";
 import { sectionSpacing } from "./utils";
 import { CodeEditor } from "~/builder/shared/code-editor";
-import { $userPlanFeatures } from "~/builder/shared/nano-states";
+import { CopyToClipboard } from "~/builder/shared/copy-to-clipboard";
 
 const imgStyle = css({
   objectFit: "contain",
@@ -47,38 +51,68 @@ const defaultMetaSettings: ProjectMeta = {
 
 const Email = z.string().email();
 
+const validateContactEmail = (
+  contactEmail: string,
+  maxContactEmails: number
+) => {
+  contactEmail = contactEmail.trim();
+  if (contactEmail.length === 0) {
+    return;
+  }
+  const emails = contactEmail.split(/\s*,\s*/);
+  if (emails.length > maxContactEmails) {
+    if (maxContactEmails === 0) {
+      return `Upgrade to PRO to customize the contact email.`;
+    }
+    return `Only ${maxContactEmails} emails are allowed.`;
+  }
+  if (emails.every((email) => Email.safeParse(email).success) === false) {
+    return "Contact email is invalid.";
+  }
+};
+
+const saveSetting = <Name extends keyof ProjectMeta>(
+  name: keyof ProjectMeta,
+  value: ProjectMeta[Name]
+) => {
+  serverSyncStore.createTransaction([$pages], (pages) => {
+    if (pages === undefined) {
+      return;
+    }
+    if (pages.meta === undefined) {
+      pages.meta = {};
+    }
+    pages.meta[name] = value;
+  });
+};
+
 export const SectionGeneral = () => {
-  const { allowContactEmail } = useStore($userPlanFeatures);
+  const { maxContactEmails } = useStore($userPlanFeatures);
+  const allowContactEmail = maxContactEmails > 0;
   const [meta, setMeta] = useState(
     () => $pages.get()?.meta ?? defaultMetaSettings
   );
   const siteNameId = useId();
   const contactEmailId = useId();
-  const contactEmailError =
-    (meta.contactEmail ?? "").trim().length === 0 ||
-    Email.safeParse(meta.contactEmail).success
-      ? undefined
-      : "Contact email is invalid.";
+  const contactEmailError = validateContactEmail(
+    meta.contactEmail ?? "",
+    maxContactEmails
+  );
   const assets = useStore($assets);
   const asset = assets.get(meta.faviconAssetId ?? "");
   const favIconUrl = asset ? `${asset.name}` : undefined;
-  const imageLoader = useStore($imageLoader);
+  const project = $project.get();
 
-  const handleSave = <Setting extends keyof ProjectMeta>(setting: Setting) => {
-    return (value: ProjectMeta[Setting]) => {
-      setMeta({
-        ...meta,
-        [setting]: value,
-      });
-      serverSyncStore.createTransaction([$pages], (pages) => {
-        if (pages === undefined) {
-          return;
-        }
-        if (pages.meta === undefined) {
-          pages.meta = {};
-        }
-        pages.meta[setting] = value;
-      });
+  if (project === undefined) {
+    return;
+  }
+
+  const handleSave = <Name extends keyof ProjectMeta>(
+    name: keyof ProjectMeta
+  ) => {
+    return (value: ProjectMeta[Name]) => {
+      setMeta({ ...meta, [name]: value });
+      saveSetting(name, value);
     };
   };
 
@@ -87,6 +121,18 @@ export const SectionGeneral = () => {
       <Text variant="titles" css={sectionSpacing}>
         General
       </Text>
+
+      <Grid gap={1} css={sectionSpacing}>
+        <Flex gap={1} align="center">
+          <Text variant="labelsSentenceCase">Project ID:</Text>
+          <Text userSelect="text">{project.id}</Text>
+          <CopyToClipboard text={project.id} copyText="Copy ID">
+            <IconButton aria-label="Copy ID">
+              <CopyIcon aria-hidden />
+            </IconButton>
+          </CopyToClipboard>
+        </Flex>
+      </Grid>
 
       <Grid gap={1} css={sectionSpacing}>
         <Flex gap={1} align="center">
@@ -123,14 +169,18 @@ export const SectionGeneral = () => {
         <InputErrorsTooltip
           errors={contactEmailError ? [contactEmailError] : undefined}
         >
-          <InputField
+          <TextArea
             id={contactEmailId}
             color={contactEmailError ? "error" : undefined}
-            placeholder="email@address.com"
-            disabled={allowContactEmail === false}
+            placeholder="john@company.com, jane@company.com"
+            autoGrow={true}
+            rows={1}
             value={meta.contactEmail ?? ""}
-            onChange={(event) => {
-              handleSave("contactEmail")(event.target.value);
+            onChange={(value) => {
+              setMeta({ ...meta, contactEmail: value });
+              if (validateContactEmail(value, maxContactEmails) === undefined) {
+                saveSetting("contactEmail", value);
+              }
             }}
           />
         </InputErrorsTooltip>
@@ -146,7 +196,7 @@ export const SectionGeneral = () => {
             height={72}
             className={imgStyle()}
             src={favIconUrl}
-            loader={imageLoader}
+            loader={wsImageLoader}
           />
 
           <Grid gap={2}>
@@ -169,57 +219,13 @@ export const SectionGeneral = () => {
           tag to every page across the published project.
         </Text>
         <CodeEditor
+          title="Custom code"
           lang="html"
           value={meta.code ?? ""}
           onChange={handleSave("code")}
+          onChangeComplete={handleSave("code")}
         />
       </Grid>
-
-      <Separator />
-
-      <CompilerSection />
-    </Grid>
-  );
-};
-
-const defaultCompilerSettings: CompilerSettings = {
-  atomicStyles: true,
-};
-
-const CompilerSection = () => {
-  const ids = useIds(["atomicStyles"]);
-  const [settings, setSettings] = useState(
-    () => $pages.get()?.compiler ?? defaultCompilerSettings
-  );
-
-  const handleSave = (settings: CompilerSettings) => {
-    serverSyncStore.createTransaction([$pages], (pages) => {
-      if (pages === undefined) {
-        return;
-      }
-      pages.compiler = settings;
-    });
-  };
-
-  return (
-    <Grid gap={2} css={sectionSpacing}>
-      <Label htmlFor={ids.atomicStyles}>Compiler</Label>
-      <CheckboxAndLabel>
-        <Checkbox
-          checked={settings.atomicStyles ?? true}
-          id={ids.atomicStyles}
-          onCheckedChange={(atomicStyles) => {
-            if (typeof atomicStyles === "boolean") {
-              const nextSettings = { ...settings, atomicStyles };
-              setSettings(nextSettings);
-              handleSave(nextSettings);
-            }
-          }}
-        />
-        <Label htmlFor={ids.atomicStyles}>
-          Generate atomic CSS when publishing
-        </Label>
-      </CheckboxAndLabel>
     </Grid>
   );
 };

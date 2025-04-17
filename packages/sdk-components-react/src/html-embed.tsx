@@ -10,7 +10,7 @@ import {
   useMemo,
 } from "react";
 import { mergeRefs } from "@react-aria/utils";
-import { ReactSdkContext } from "@webstudio-is/react-sdk";
+import { ReactSdkContext } from "@webstudio-is/react-sdk/runtime";
 import { executeDomEvents, patchDomEvents } from "./html-embed-patchers";
 
 export const __testing__ = {
@@ -129,6 +129,7 @@ type ChildProps = {
   innerRef: ForwardedRef<HTMLDivElement>;
   // code can be actually undefined when prop is not provided
   code?: string;
+  className?: string;
 };
 
 const Placeholder = (props: ChildProps) => {
@@ -214,6 +215,7 @@ type HtmlEmbedProps = {
   code: string;
   executeScriptOnCanvas?: boolean;
   clientOnly?: boolean;
+  className?: string;
   // avoid builder passing it to dom
   children?: never;
 };

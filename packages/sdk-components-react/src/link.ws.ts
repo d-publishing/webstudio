@@ -4,18 +4,14 @@ import {
   type PresetStyle,
   type WsComponentMeta,
   type WsComponentPropsMeta,
-} from "@webstudio-is/react-sdk";
-import { a } from "@webstudio-is/react-sdk/css-normalize";
+} from "@webstudio-is/sdk";
+import { a } from "@webstudio-is/sdk/normalize.css";
 import type { defaultTag } from "./link";
 import { props } from "./__generated__/link.props";
 
 const presetStyle = {
   a: [
     ...a,
-    {
-      property: "minHeight",
-      value: { type: "unit", unit: "em", value: 1 },
-    },
     {
       property: "display",
       value: { type: "keyword", value: "inline-block" },
@@ -24,15 +20,10 @@ const presetStyle = {
 } satisfies PresetStyle<typeof defaultTag>;
 
 export const meta: WsComponentMeta = {
-  category: "general",
   type: "container",
-  label: "Link",
-  description:
-    "Use a link to send your users to another page, section, or resource. Configure links in the Settings panel.",
+  placeholder: "Link",
   icon: LinkIcon,
-  invalidAncestors: ["Link", "Button"],
   presetStyle,
-  order: 1,
   states: [
     ...defaultStates,
     {
@@ -43,19 +34,6 @@ export const meta: WsComponentMeta = {
       category: "component-states",
       selector: "[aria-current=page]",
       label: "Current page",
-    },
-  ],
-  template: [
-    {
-      type: "instance",
-      component: "Link",
-      children: [
-        {
-          type: "text",
-          value: "Link text you can edit",
-          placeholder: true,
-        },
-      ],
     },
   ],
 };
@@ -69,5 +47,5 @@ export const propsMeta: WsComponentPropsMeta = {
       required: false,
     },
   },
-  initialProps: ["id", "className", "href", "target"],
+  initialProps: ["id", "className", "href", "target", "prefetch", "download"],
 };

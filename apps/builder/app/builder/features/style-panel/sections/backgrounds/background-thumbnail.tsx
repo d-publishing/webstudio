@@ -1,19 +1,37 @@
 import { useStore } from "@nanostores/react";
 import type { Assets } from "@webstudio-is/sdk";
-import { Image as WebstudioImage } from "@webstudio-is/image";
+import { Image as WebstudioImage, wsImageLoader } from "@webstudio-is/image";
 import { styled, theme } from "@webstudio-is/design-system";
-import { $assets, $imageLoader } from "~/shared/nano-states";
-import type { StyleInfo } from "../../shared/style-info";
+import {
+  StyleValue,
+  toValue,
+  type CssProperty,
+} from "@webstudio-is/css-engine";
+import { $assets } from "~/shared/nano-states";
 import brokenImage from "~/shared/images/broken-image-placeholder.svg";
-import { layeredBackgroundProps } from "./background-layers";
-import { toValue } from "@webstudio-is/css-engine";
-import { toPascalCase } from "../../shared/keyword-utils";
+import { humanizeString } from "~/shared/string-utils";
+import { useComputedStyles } from "../../shared/model";
+import { getComputedRepeatedItem } from "../../shared/repeated-style";
+
+export const repeatedProperties = [
+  "background-image",
+  "background-attachment",
+  "background-clip",
+  "background-origin",
+  "background-position-x",
+  "background-position-y",
+  "background-repeat",
+  "background-size",
+  "background-blend-mode",
+] satisfies [CssProperty, ...CssProperty[]];
+
+const thumbSize = theme.spacing[9];
 
 const Thumbnail = styled("div", {
   borderRadius: 2,
   borderWidth: 0,
-  width: theme.spacing[10],
-  height: theme.spacing[10],
+  width: thumbSize,
+  height: thumbSize,
 });
 
 const NoneThumbnail = styled(Thumbnail, {
@@ -23,8 +41,8 @@ const NoneThumbnail = styled(Thumbnail, {
 
 const StyledWebstudioImage = styled(WebstudioImage, {
   position: "relative",
-  width: theme.spacing[10],
-  height: theme.spacing[10],
+  width: thumbSize,
+  height: thumbSize,
   objectFit: "contain",
 
   // This is shown only if an image was not loaded and broken
@@ -58,8 +76,13 @@ const gradientNames = [
   "repeating-radial-gradient",
 ];
 
-export const getLayerName = (layerStyle: StyleInfo, assets: Assets) => {
-  const backgroundImageStyle = layerStyle.backgroundImage?.value;
+export const getBackgroundLabel = (
+  backgroundImageStyle: undefined | StyleValue,
+  assets: Assets
+) => {
+  if (backgroundImageStyle?.type === "var") {
+    return `--${backgroundImageStyle.value}`;
+  }
   if (
     backgroundImageStyle?.type === "image" &&
     backgroundImageStyle.value.type === "asset"
@@ -82,61 +105,60 @@ export const getLayerName = (layerStyle: StyleInfo, assets: Assets) => {
       backgroundImageStyle.value.includes(name)
     );
 
-    return gradientName ? toPascalCase(gradientName) : "Gradient";
+    return gradientName ? humanizeString(gradientName) : "Gradient";
   }
 
   return "None";
 };
 
-export const LayerThumbnail = (props: { layerStyle: StyleInfo }) => {
+type RepeatedProperty = (typeof repeatedProperties)[number];
+
+export const BackgroundThumbnail = ({ index }: { index: number }) => {
   const assets = useStore($assets);
-  const imageLoader = useStore($imageLoader);
-  const backgroundImageStyle = props.layerStyle.backgroundImage?.value;
+  const styles = useComputedStyles(repeatedProperties);
+  const [backgroundImage] = styles;
+  const backgroundImageValue = getComputedRepeatedItem(backgroundImage, index);
 
   if (
-    backgroundImageStyle?.type === "image" &&
-    backgroundImageStyle.value.type === "asset"
+    backgroundImageValue?.type === "image" &&
+    backgroundImageValue.value.type === "asset"
   ) {
-    const asset = assets.get(backgroundImageStyle.value.value);
+    const asset = assets.get(backgroundImageValue.value.value);
     if (asset === undefined) {
       return null;
     }
-
     return (
       <StyledWebstudioImage
         key={asset.id}
-        loader={imageLoader}
+        loader={wsImageLoader}
         src={asset.name}
-        width={theme.spacing[10]}
+        width={thumbSize}
         optimize={true}
       />
     );
   }
 
   if (
-    backgroundImageStyle?.type === "image" &&
-    backgroundImageStyle.value.type === "url"
+    backgroundImageValue?.type === "image" &&
+    backgroundImageValue.value.type === "url"
   ) {
     return (
       <StyledWebstudioImage
-        key={backgroundImageStyle.value.url}
-        loader={imageLoader}
-        src={backgroundImageStyle.value.url}
-        width={theme.spacing[10]}
+        key={backgroundImageValue.value.url}
+        loader={wsImageLoader}
+        src={backgroundImageValue.value.url}
+        width={thumbSize}
         optimize={true}
       />
     );
   }
 
-  if (backgroundImageStyle?.type === "unparsed") {
-    const cssStyle: {
-      [property in (typeof layeredBackgroundProps)[number]]?: string;
-    } = {};
-
-    for (const property of layeredBackgroundProps) {
-      cssStyle[property] = toValue(props.layerStyle[property]?.value);
+  if (backgroundImageValue?.type === "unparsed") {
+    const cssStyle: { [property in RepeatedProperty]?: string } = {};
+    for (const styleDecl of styles) {
+      const itemValue = getComputedRepeatedItem(styleDecl, index);
+      cssStyle[styleDecl.property as RepeatedProperty] = toValue(itemValue);
     }
-
     return <Thumbnail css={cssStyle} />;
   }
 

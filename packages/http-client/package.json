@@ -1,6 +1,6 @@
 {
   "name": "@webstudio-is/http-client",
-  "version": "0.168.0",
+  "version": "0.0.0-webstudio-version",
   "description": "Webstudio HTTP Client",
   "author": "Webstudio <github@webstudio.is>",
   "homepage": "https://webstudio.is",
@@ -8,14 +8,15 @@
   "scripts": {
     "build": "rm -rf lib && esbuild src/index.ts --outdir=lib --bundle --format=esm --packages=external",
     "dts": "tsc --project tsconfig.dts.json",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest run"
   },
   "dependencies": {
     "@webstudio-is/sdk": "workspace:*"
   },
   "devDependencies": {
     "@webstudio-is/tsconfig": "workspace:*",
-    "typescript": "5.5.2"
+    "vitest": "^3.0.8"
   },
   "exports": {
     "webstudio": "./src/index.ts",
@@ -23,7 +24,8 @@
     "import": "./lib/index.js"
   },
   "files": [
-    "lib/*"
+    "lib/*",
+    "!*.{test,stories}.*"
   ],
   "license": "AGPL-3.0-or-later",
   "private": false,

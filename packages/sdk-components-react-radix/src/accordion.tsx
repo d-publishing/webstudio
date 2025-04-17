@@ -12,22 +12,15 @@ import {
   Trigger,
   Content,
 } from "@radix-ui/react-accordion";
-import {
-  getClosestInstance,
-  getIndexWithinAncestorFromComponentProps,
-  getInstanceSelectorById,
-  type Hook,
-} from "@webstudio-is/react-sdk";
+import { getIndexWithinAncestorFromProps } from "@webstudio-is/sdk/runtime";
+import { getClosestInstance, type Hook } from "@webstudio-is/react-sdk/runtime";
 
 export const Accordion = forwardRef<
   HTMLDivElement,
   Omit<
     Extract<ComponentPropsWithoutRef<typeof Root>, { type: "single" }>,
-    "type" | "asChild" | "defaultValue" | "value" | "onValueChange"
-  > & {
-    value: string;
-    onValueChange: (value: string) => void;
-  }
+    "type" | "asChild"
+  >
 >((props, ref) => {
   return <Root ref={ref} type="single" {...props} />;
 });
@@ -36,7 +29,7 @@ export const AccordionItem = forwardRef<
   HTMLDivElement,
   Omit<ComponentPropsWithoutRef<typeof Item>, "value"> & { value?: string }
 >(({ value, ...props }, ref) => {
-  const index = getIndexWithinAncestorFromComponentProps(props);
+  const index = getIndexWithinAncestorFromProps(props);
   return <Item ref={ref} value={value ?? index ?? ""} {...props} />;
 });
 
@@ -78,15 +71,11 @@ export const hooksAccordion: Hook = {
         );
         if (accordion && item) {
           const itemValue =
-            context.getPropValue(item.id, "value") ??
+            context.getPropValue(item, "value") ??
             context.indexesWithinAncestors.get(item.id)?.toString();
 
           if (itemValue) {
-            const instanceSelector = getInstanceSelectorById(
-              event.instanceSelector,
-              accordion.id
-            );
-            context.setMemoryProp(instanceSelector, "value", itemValue);
+            context.setMemoryProp(accordion, "value", itemValue);
           }
         }
       }

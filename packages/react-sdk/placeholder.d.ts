@@ -1,16 +1,30 @@
+declare module "__CONSTANTS__" {
+  import type { ImageLoader } from "@webstudio-is/image";
+  export const assetBaseUrl: string;
+  export const imageLoader: ImageLoader;
+}
+
 declare module "__CLIENT__" {
-  import type { FontAsset, ImageAsset, System } from "@webstudio-is/sdk";
+  import type { ResourceRequest, System } from "@webstudio-is/sdk";
+
+  export const projectId: string;
+
+  export const lastPublished: string;
 
   export const siteName: string;
 
-  export const favIconAsset: ImageAsset | undefined;
+  export const favIconAsset: string | undefined;
 
-  export const socialImageAsset: ImageAsset | undefined;
+  export const breakpoints: {
+    id: string;
+    minWidth?: number;
+    maxWidth?: number;
+  }[];
 
   // Font assets on current page (can be preloaded)
-  export const pageFontAssets: FontAsset[];
+  export const pageFontAssets: string[];
 
-  export const pageBackgroundImageAssets: ImageAsset[];
+  export const pageBackgroundImageAssets: string[];
 
   export const CustomCode: () => ReactNode;
 
@@ -18,26 +32,20 @@ declare module "__CLIENT__" {
 }
 
 declare module "__SERVER__" {
-  import type { PageMeta, System } from "@webstudio-is/sdk";
+  import type { PageMeta, System, ResourceRequest } from "@webstudio-is/sdk";
 
-  export const loadResources: (props: {
-    system: System;
-  }) => Promise<Record<string, unknown>>;
+  export const getResources: (props: { system: System }) => {
+    data: Map<string, ResourceRequest>;
+    action: Map<string, ResourceRequest>;
+  };
 
   export const getPageMeta: (props: {
     system: System;
     resources: Record<string, any>;
   }) => PageMeta;
 
-  export const formsProperties: Map<
-    string,
-    { method?: string; action?: string }
-  >;
-
   type Params = Record<string, string | undefined>;
   export const getRemixParams: ({ ...params }: Params) => Params;
-
-  export const projectId: string;
 
   export const contactEmail: undefined | string;
 }

@@ -24,10 +24,7 @@ export const ToolbarToggleGroup = styled(ToolbarPrimitive.ToggleGroup, {
   alignItems: "center",
 });
 
-const focusRing = focusRingStyle({
-  top: theme.spacing[3],
-  bottom: theme.spacing[3],
-});
+const focusRing = focusRingStyle();
 
 const toggleItemStyle = css(textVariants.labelsTitleCase, {
   // reset styles
@@ -63,7 +60,7 @@ const toggleItemStyle = css(textVariants.labelsTitleCase, {
     },
     variant: {
       subtle: {
-        color: theme.colors.foregroundSubtle,
+        color: theme.colors.foregroundTextMoreSubtle,
         "&:hover, &[data-state=on], &[aria-checked=true]": {
           color: "inherit",
         },
@@ -72,6 +69,15 @@ const toggleItemStyle = css(textVariants.labelsTitleCase, {
         "&[data-state=on]": {
           color: theme.colors.foregroundSuccess,
         },
+      },
+      chevron: {
+        minWidth: "auto",
+        paddingInline: 0,
+        color: theme.colors.foregroundContrastSubtle,
+        "&:hover, &:focus-visible, &[aria-expanded=true]": {
+          color: theme.colors.foregroundContrastMain,
+        },
+        "&:focus-visible": focusRingStyle({ left: 0, right: 0 }),
       },
     },
   },

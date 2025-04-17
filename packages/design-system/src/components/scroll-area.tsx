@@ -6,43 +6,15 @@ const ScrollAreaRoot = styled(Root, {
   boxSizing: "border-box",
   overflow: "hidden",
   display: "grid",
+  // We had a case where some Windows 10 + Chrome 129 users couldn't scroll style panel.
+  willChange: "transform",
 });
 
 const ScrollAreaThumb = styled(Thumb, {
+  position: "relative",
   boxSizing: "border-box",
   background: theme.colors.foregroundScrollBar,
   borderRadius: theme.spacing[4],
-  // increase target size for touch devices https://www.w3.org/WAI/WCAG21/Understanding/target-size.html
-
-  position: "relative",
-
-  "&::before": {
-    content: '""',
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    transform: "translate(-50%, -50%)",
-    width: "100%",
-    height: "100%",
-  },
-
-  variants: {
-    orientation: {
-      vertical: {
-        "&::before": {
-          minWidth: 16,
-          minHeight: 44,
-        },
-      },
-      horizontal: {
-        minHeight: "100%",
-        "&::before": {
-          minWidth: 44,
-          minHeight: 16,
-        },
-      },
-    },
-  },
 });
 
 const ScrollAreaScrollbar = styled(Scrollbar, {
@@ -54,12 +26,11 @@ const ScrollAreaScrollbar = styled(Scrollbar, {
   touchAction: "none",
   '&[data-orientation="vertical"]': {
     width: theme.spacing[6],
-    paddingRight: 3,
   },
   '&[data-orientation="horizontal"]': {
     flexDirection: "column",
     height: theme.spacing[6],
-    paddingBottom: 3,
+    "--radix-scroll-area-thumb-height": theme.spacing[4],
   },
 
   variants: {
@@ -122,12 +93,12 @@ export const ScrollArea = forwardRef(
         </Viewport>
         {(direction === "vertical" || direction === "both") && (
           <ScrollAreaScrollbar orientation="vertical" direction={direction}>
-            <ScrollAreaThumb orientation="vertical" />
+            <ScrollAreaThumb />
           </ScrollAreaScrollbar>
         )}
         {(direction === "horizontal" || direction === "both") && (
           <ScrollAreaScrollbar orientation="horizontal" direction={direction}>
-            <ScrollAreaThumb orientation="horizontal" />
+            <ScrollAreaThumb />
           </ScrollAreaScrollbar>
         )}
       </ScrollAreaRoot>

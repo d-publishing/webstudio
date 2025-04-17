@@ -1,12 +1,18 @@
 import { z } from "zod";
 import type {
-  Property as GeneratedProperty,
+  CamelCasedProperty,
+  HyphenatedProperty,
   Unit as GeneratedUnit,
 } from "./__generated__/types";
+import { toValue, type TransformValue } from "./core/to-value";
 
 export type CustomProperty = `--${string}`;
 
-export type StyleProperty = GeneratedProperty | CustomProperty;
+export type StyleProperty = CamelCasedProperty | CustomProperty;
+
+export type CssProperty = HyphenatedProperty | CustomProperty;
+
+export type CssStyleMap = Map<CssProperty, StyleValue>;
 
 const Unit = z.string() as z.ZodType<GeneratedUnit | "number">;
 
@@ -103,12 +109,48 @@ export const InvalidValue = z.object({
 });
 export type InvalidValue = z.infer<typeof InvalidValue>;
 
+/**
+ * Use GuaranteedInvalidValue if you need a temp placeholder before user enters a value
+ * @deprecated
+ */
 const UnsetValue = z.object({
   type: z.literal("unset"),
   value: z.literal(""),
   hidden: z.boolean().optional(),
 });
 export type UnsetValue = z.infer<typeof UnsetValue>;
+
+export const VarFallback = z.union([
+  UnparsedValue,
+  KeywordValue,
+  UnitValue,
+  RgbValue,
+]);
+export type VarFallback = z.infer<typeof VarFallback>;
+
+export const toVarFallback = (
+  styleValue: StyleValue,
+  transformValue?: TransformValue
+): VarFallback => {
+  if (
+    styleValue.type === "unparsed" ||
+    styleValue.type === "keyword" ||
+    styleValue.type === "unit" ||
+    styleValue.type === "rgb"
+  ) {
+    return styleValue;
+  }
+  styleValue satisfies Exclude<StyleValue, VarFallback>;
+  return { type: "unparsed", value: toValue(styleValue, transformValue) };
+};
+
+const VarValue = z.object({
+  type: z.literal("var"),
+  value: z.string(),
+  fallback: VarFallback.optional(),
+  hidden: z.boolean().optional(),
+});
+export type VarValue = z.infer<typeof VarValue>;
 
 export const TupleValueItem = z.union([
   UnitValue,
@@ -117,6 +159,7 @@ export const TupleValueItem = z.union([
   ImageValue,
   RgbValue,
   FunctionValue,
+  VarValue,
 ]);
 export type TupleValueItem = z.infer<typeof TupleValueItem>;
 
@@ -128,15 +171,30 @@ export const TupleValue = z.object({
 
 export type TupleValue = z.infer<typeof TupleValue>;
 
+export const ShadowValue = z.object({
+  type: z.literal("shadow"),
+  hidden: z.boolean().optional(),
+  position: z.union([z.literal("inset"), z.literal("outset")]),
+  offsetX: z.union([UnitValue, VarValue]),
+  offsetY: z.union([UnitValue, VarValue]),
+  blur: z.union([UnitValue, VarValue]).optional(),
+  spread: z.union([UnitValue, VarValue]).optional(),
+  color: z.union([RgbValue, KeywordValue, VarValue]).optional(),
+});
+
+export type ShadowValue = z.infer<typeof ShadowValue>;
+
 const LayerValueItem = z.union([
   UnitValue,
   KeywordValue,
   UnparsedValue,
   ImageValue,
   TupleValue,
+  ShadowValue,
   RgbValue,
   InvalidValue,
   FunctionValue,
+  VarValue,
 ]);
 
 export type LayerValueItem = z.infer<typeof LayerValueItem>;
@@ -151,7 +209,7 @@ export const LayersValue = z.object({
 
 export type LayersValue = z.infer<typeof LayersValue>;
 
-const ValidStaticStyleValue = z.union([
+export const StyleValue = z.union([
   ImageValue,
   LayersValue,
   UnitValue,
@@ -162,53 +220,10 @@ const ValidStaticStyleValue = z.union([
   TupleValue,
   FunctionValue,
   GuaranteedInvalidValue,
-]);
-
-export type ValidStaticStyleValue = z.infer<typeof ValidStaticStyleValue>;
-
-/**
- * All StyleValue types that going to need wrapping into a CSS variable when rendered
- * on canvas inside builder.
- * Values like InvalidValue, UnsetValue, VarValue don't need to be wrapped
- */
-export const isValidStaticStyleValue = (
-  styleValue: StyleValue
-): styleValue is ValidStaticStyleValue => {
-  // guard against invalid checks
-  const staticStyleValue = styleValue as ValidStaticStyleValue;
-  return (
-    staticStyleValue.type === "image" ||
-    staticStyleValue.type === "layers" ||
-    staticStyleValue.type === "unit" ||
-    staticStyleValue.type === "keyword" ||
-    staticStyleValue.type === "fontFamily" ||
-    staticStyleValue.type === "rgb" ||
-    staticStyleValue.type === "unparsed" ||
-    staticStyleValue.type === "tuple" ||
-    staticStyleValue.type === "function" ||
-    staticStyleValue.type === "guaranteedInvalid"
-  );
-};
-
-const VarValue = z.object({
-  type: z.literal("var"),
-  value: z.string(),
-  fallbacks: z.array(ValidStaticStyleValue),
-  hidden: z.boolean().optional(),
-});
-export type VarValue = z.infer<typeof VarValue>;
-
-export const StyleValue = z.union([
-  ValidStaticStyleValue,
   InvalidValue,
   UnsetValue,
   VarValue,
+  ShadowValue,
 ]);
 
 export type StyleValue = z.infer<typeof StyleValue>;
-
-const Style = z.record(z.string(), StyleValue);
-
-export type Style = {
-  [property in StyleProperty]?: StyleValue;
-} & { [property: CustomProperty]: StyleValue };

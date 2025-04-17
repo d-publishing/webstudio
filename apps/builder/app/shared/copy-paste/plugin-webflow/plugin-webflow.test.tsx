@@ -1,4 +1,5 @@
-import { test, expect, describe, beforeEach } from "@jest/globals";
+import type { JSX } from "react";
+import { test, expect, describe, beforeEach } from "vitest";
 import { nanoid } from "nanoid";
 import {
   type NestingRule,
@@ -9,8 +10,8 @@ import {
   type WebstudioFragment,
   type Instance,
 } from "@webstudio-is/sdk";
-import { $, renderJsx } from "@webstudio-is/sdk/testing";
-import * as defaultMetas from "@webstudio-is/sdk-components-react-remix/metas";
+import { $, renderData } from "@webstudio-is/template";
+import * as defaultMetas from "@webstudio-is/sdk-components-react/metas";
 import { __testing__ } from "./plugin-webflow";
 import {
   $breakpoints,
@@ -40,7 +41,7 @@ const equalFragment = (fragment: WebstudioFragment, jsx: JSX.Element) => {
     });
   });
 
-  const expected = renderJsx(jsx);
+  const expected = renderData(jsx);
 
   const expectedInstances = new Map();
   for (const instance of expected.instances.values()) {
@@ -100,6 +101,10 @@ beforeEach(() => {
     isDeleted: false,
     previewImageAsset: null,
     marketplaceApprovalStatus: "PENDING",
+    latestStaticBuild: null,
+    domainsVirtual: [],
+    latestBuildVirtual: null,
+    previewImageAssetId: null,
   });
 
   $breakpoints.set(
@@ -135,7 +140,7 @@ test("Heading", async () => {
     },
   });
 
-  equalFragment(fragment, <$.Heading tag="h1">Turtle in the sea</$.Heading>);
+  equalFragment(fragment, <$.Heading ws:tag="h1">Turtle in the sea</$.Heading>);
   expect(toCss(fragment)).toMatchInlineSnapshot(`
     "@media all {
       h1 {
@@ -185,10 +190,10 @@ test("Link Block, Button, Text Link", async () => {
         background-color: rgba(0, 0, 0, 0)
       }
       a:active {
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
       a:hover {
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
     }"
   `);
@@ -320,7 +325,7 @@ test("Text", async () => {
 
   equalFragment(
     fragment,
-    <$.Text>This is some text inside of a div block.</$.Text>
+    <$.Text ws:tag="div">This is some text inside of a div block.</$.Text>
   );
 
   expect(toCss(fragment)).toMatchInlineSnapshot(`""`);
@@ -520,11 +525,43 @@ test("Section", async () => {
     },
   });
 
-  equalFragment(fragment, <$.Box tag="section" />);
+  equalFragment(fragment, <$.Box ws:tag="section" />);
   expect(toCss(fragment)).toMatchInlineSnapshot(`
     "@media all {
       section {
         display: block
+      }
+    }"
+  `);
+});
+
+test("Figure", async () => {
+  const fragment = await toWebstudioFragment({
+    type: "@webflow/XscpData",
+    payload: {
+      nodes: [
+        {
+          _id: "7c6bc1fd-128d-514b-167b-605a910e435c",
+          type: "Block",
+          tag: "figure",
+          classes: [],
+          children: [],
+        },
+      ],
+      styles: [],
+      assets: [],
+    },
+  });
+
+  equalFragment(fragment, <$.Box ws:tag="figure" />);
+  expect(toCss(fragment)).toMatchInlineSnapshot(`
+    "@media all {
+      figure {
+        display: block;
+        margin-top: 0;
+        margin-right: 0;
+        margin-bottom: 10px;
+        margin-left: 0
       }
     }"
   `);
@@ -618,7 +655,7 @@ test("Block", async () => {
     },
   });
 
-  equalFragment(fragment, <$.Box />);
+  equalFragment(fragment, <$.Box ws:tag="div" />);
   expect(toCss(fragment)).toMatchInlineSnapshot(`""`);
 });
 
@@ -640,7 +677,15 @@ test("V Flex", async () => {
     },
   });
   equalFragment(fragment, <$.Box />);
-  expect(toCss(fragment)).toMatchInlineSnapshot(`""`);
+  expect(toCss(fragment)).toMatchInlineSnapshot(`
+    "@media all {
+      w-layout-vflex {
+        flex-direction: column;
+        align-items: flex-start;
+        display: flex
+      }
+    }"
+  `);
 });
 
 test("H Flex", async () => {
@@ -661,7 +706,15 @@ test("H Flex", async () => {
     },
   });
   equalFragment(fragment, <$.Box />);
-  expect(toCss(fragment)).toMatchInlineSnapshot(`""`);
+  expect(toCss(fragment)).toMatchInlineSnapshot(`
+    "@media all {
+      w-layout-hflex {
+        flex-direction: row;
+        align-items: flex-start;
+        display: flex
+      }
+    }"
+  `);
 });
 
 test("QuickStack with instance styles", async () => {
@@ -909,7 +962,7 @@ test("Image", async () => {
         vertical-align: middle;
         max-width: 100%;
         display: inline-block;
-        border: 0 none currentColor
+        border: 0 none currentcolor
       }
     }"
   `);
@@ -936,6 +989,9 @@ test("HtmlEmbed", async () => {
   equalFragment(fragment, <$.HtmlEmbed code="some html" clientOnly={true} />);
   expect(toCss(fragment)).toMatchInlineSnapshot(`
     "@media all {
+      w-embed {
+        display: block
+      }
       w-embed:after {
         content: " ";
         grid-row-start: 1;
@@ -1347,12 +1403,12 @@ test("RichText", async () => {
   equalFragment(
     fragment,
     <$.Box>
-      <$.Heading tag="h1">Heading 1</$.Heading>
-      <$.Heading tag="h2">Heading 2</$.Heading>
-      <$.Heading tag="h3">Heading 3</$.Heading>
-      <$.Heading tag="h4">Heading 4</$.Heading>
-      <$.Heading tag="h5">Heading 5</$.Heading>
-      <$.Heading tag="h6">Heading 6</$.Heading>
+      <$.Heading ws:tag="h1">Heading 1</$.Heading>
+      <$.Heading ws:tag="h2">Heading 2</$.Heading>
+      <$.Heading ws:tag="h3">Heading 3</$.Heading>
+      <$.Heading ws:tag="h4">Heading 4</$.Heading>
+      <$.Heading ws:tag="h5">Heading 5</$.Heading>
+      <$.Heading ws:tag="h6">Heading 6</$.Heading>
       <$.Paragraph>
         Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
         tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
@@ -1469,10 +1525,10 @@ test("RichText", async () => {
         background-color: rgba(0, 0, 0, 0)
       }
       a:active {
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
       a:hover {
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
       strong {
         font-weight: bold
@@ -1623,7 +1679,7 @@ test("Form", async () => {
         padding: 0
       }
       input::-moz-focus-inner {
-        border: 0 none currentColor;
+        border: 0 none currentcolor;
         padding: 0
       }
       w-input {
@@ -1658,7 +1714,7 @@ test("Form", async () => {
         border-right-color: rgba(56, 152, 236, 1);
         border-bottom-color: rgba(56, 152, 236, 1);
         border-left-color: rgba(56, 152, 236, 1);
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
     }"
   `);
@@ -1707,7 +1763,7 @@ test("FormButton", async () => {
         padding: 0
       }
       input::-moz-focus-inner {
-        border: 0 none currentColor;
+        border: 0 none currentcolor;
         padding: 0
       }
       w-button {
@@ -1723,11 +1779,11 @@ test("FormButton", async () => {
         padding-bottom: 9px;
         padding-left: 15px;
         text-decoration-line: none;
-        text-decoration-style: initial;
-        text-decoration-color: initial;
+        text-decoration-style: solid;
+        text-decoration-color: currentcolor;
         display: inline-block;
         appearance: button;
-        border: 0 none currentColor
+        border: 0 none currentcolor
       }
     }"
   `);
@@ -1795,7 +1851,7 @@ test("FormTextInput", async () => {
         padding: 0
       }
       input::-moz-focus-inner {
-        border: 0 none currentColor;
+        border: 0 none currentcolor;
         padding: 0
       }
       w-input {
@@ -1830,7 +1886,7 @@ test("FormTextInput", async () => {
         border-right-color: rgba(56, 152, 236, 1);
         border-bottom-color: rgba(56, 152, 236, 1);
         border-left-color: rgba(56, 152, 236, 1);
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
     }"
   `);
@@ -1964,7 +2020,7 @@ test("FormTextarea", async () => {
         border-right-color: rgba(56, 152, 236, 1);
         border-bottom-color: rgba(56, 152, 236, 1);
         border-left-color: rgba(56, 152, 236, 1);
-        outline: 0 none currentColor
+        outline: 0 none currentcolor
       }
     }"
   `);
@@ -2068,7 +2124,7 @@ test("FormCheckboxWrapper, FormCheckboxInput, FormInlineLabel", async () => {
         required={false}
         defaultChecked={false}
       />
-      <$.Text tag="span" ws:label="Label">
+      <$.Text ws:tag="span" ws:label="Label">
         Checkbox
       </$.Text>
     </$.Label>
@@ -2114,7 +2170,7 @@ test("FormCheckboxWrapper, FormCheckboxInput, FormInlineLabel", async () => {
         padding: 0
       }
       input::-moz-focus-inner {
-        border: 0 none currentColor;
+        border: 0 none currentcolor;
         padding: 0
       }
       w-checkbox-input {
@@ -2193,7 +2249,7 @@ test("FormRadioWrapper, FormRadioInput, FormInlineLabel", async () => {
     fragment,
     <$.Label ws:label="Radio Field">
       <$.RadioButton id="radio" name="radio" required={false} value="Radio" />
-      <$.Text tag="span" ws:label="Label">
+      <$.Text ws:tag="span" ws:label="Label">
         Radio
       </$.Text>
     </$.Label>
@@ -2239,7 +2295,7 @@ test("FormRadioWrapper, FormRadioInput, FormInlineLabel", async () => {
         padding: 0
       }
       input::-moz-focus-inner {
-        border: 0 none currentColor;
+        border: 0 none currentcolor;
         padding: 0
       }
       w-radio-input {
@@ -2374,7 +2430,7 @@ test("Multiline text", async () => {
 
   equalFragment(
     fragment,
-    <$.Box>
+    <$.Box ws:tag="div">
       {"a"}
       {"\n"}
       {"b"}
@@ -2410,7 +2466,7 @@ describe("Custom attributes", () => {
         assets: [],
       },
     });
-    equalFragment(fragment, <$.Heading tag="h1" at="b" />);
+    equalFragment(fragment, <$.Heading ws:tag="h1" at="b" />);
     expect(toCss(fragment)).toMatchInlineSnapshot(`
       "@media all {
         h1 {
@@ -2449,7 +2505,7 @@ test("Set show false when visibility's only condition is false", async () => {
       assets: [],
     },
   });
-  equalFragment(fragment, <$.Box data-ws-show={false} />);
+  equalFragment(fragment, <$.Box data-ws-show={false} ws:tag="div" />);
   expect(toCss(fragment)).toMatchInlineSnapshot(`""`);
 });
 
@@ -2597,7 +2653,7 @@ describe("Styles", () => {
             type: "class",
             name: "is-small",
             comb: "&",
-            styleLess: "",
+            styleLess: "padding: 1rem;",
           },
           {
             _id: "194e7d07-469d-6ffa-3925-1f51bdad7e46",
@@ -2641,14 +2697,99 @@ describe("Styles", () => {
           background-color: rgba(0, 0, 0, 0)
         }
         a:active {
-          outline: 0 none currentColor
+          outline: 0 none currentcolor
         }
         a:hover {
-          outline: 0 none currentColor
+          outline: 0 none currentcolor
         }
         button.is-small.is-secondary {
           text-align: center;
-          background-color: transparent
+          background-color: transparent;
+          padding: 1rem
+        }
+      }"
+    `);
+  });
+
+  test("Skip empty combo class", async () => {
+    const fragment = await toWebstudioFragment({
+      type: "@webflow/XscpData",
+      payload: {
+        nodes: [
+          {
+            _id: "56ede23d-6dcc-a320-0af4-3a803d8efd88",
+            type: "Block",
+            tag: "div",
+            classes: ["08c3532a-4e88-1106-9fda-e4dcd66f93f0"],
+            children: [
+              "d06c01f8-da59-b31e-a910-55a6d33898f0",
+              "b67fb4c4-ce52-b441-1d89-55b165282c99",
+            ],
+          },
+          {
+            _id: "d06c01f8-da59-b31e-a910-55a6d33898f0",
+            type: "Block",
+            tag: "div",
+            classes: ["6569b562-7de4-bd09-3d2d-59d7c11ec988"],
+            children: [],
+          },
+          {
+            _id: "b67fb4c4-ce52-b441-1d89-55b165282c99",
+            type: "Block",
+            tag: "div",
+            classes: [
+              "08c3532a-4e88-1106-9fda-e4dcd66f93f0",
+              "c4851546-799d-c6bf-fb17-0b5765f48d72",
+            ],
+            children: [],
+          },
+        ],
+        styles: [
+          {
+            _id: "08c3532a-4e88-1106-9fda-e4dcd66f93f0",
+            fake: false,
+            type: "class",
+            name: "d1",
+            namespace: "",
+            comb: "",
+            styleLess: "color: hsla(0, 70.45%, 48.11%, 1.00);",
+            variants: {},
+            children: ["c4851546-799d-c6bf-fb17-0b5765f48d72"],
+          },
+          {
+            _id: "6569b562-7de4-bd09-3d2d-59d7c11ec988",
+            fake: false,
+            type: "class",
+            name: "d2",
+            namespace: "",
+            comb: "",
+            styleLess: "font-size: 200px;",
+            variants: {},
+            children: [],
+          },
+          {
+            _id: "c4851546-799d-c6bf-fb17-0b5765f48d72",
+            fake: false,
+            type: "class",
+            name: "d2",
+            namespace: "",
+            comb: "&",
+            styleLess: "",
+            variants: {},
+            children: [],
+          },
+        ],
+        assets: [],
+      },
+    });
+
+    expect(toCss(fragment)).toMatchInlineSnapshot(`
+      "@media all {
+        d1 {
+          color: rgba(209, 36, 36, 1)
+        }
+        d2 {
+          font-size: 200px
         }
       }"
     `);
@@ -2767,10 +2908,10 @@ describe("Styles", () => {
           background-color: rgba(0, 0, 0, 0)
         }
         a:active {
-          outline: 0 none currentColor
+          outline: 0 none currentcolor
         }
         a:hover {
-          outline: 0 none currentColor
+          outline: 0 none currentcolor
         }
         x {
           transform: translate3d(7px, 74px, 16px)

@@ -1,15 +1,23 @@
 import {
+  camelCaseProperty,
+  keywordValues,
+  propertyDescriptions,
+} from "@webstudio-is/css-data";
+import {
   TupleValue,
-  type StyleValue,
   TupleValueItem,
+  type StyleValue,
+  type CssProperty,
 } from "@webstudio-is/css-engine";
 import { Flex, Grid, PositionGrid } from "@webstudio-is/design-system";
-import type { ControlProps } from "../types";
-import { styleConfigByName } from "../../shared/configs";
-import { getStyleSource } from "../../shared/style-info";
+import type { ComputedStyleDecl } from "~/shared/style-object-model";
 import { CssValueInputContainer } from "../../shared/css-value-input";
-import type { SetValue } from "../../shared/use-style-data";
-import { NonResetablePropertyName } from "../../shared/property-name";
+import {
+  deleteProperty,
+  setProperty,
+  type SetValue,
+} from "../../shared/use-style-data";
+import { PropertyInlineLabel } from "../../property-label";
 
 const toPosition = (value: TupleValue) => {
   // Should never actually happen, just for TS
@@ -45,19 +53,16 @@ const toTuple = (
 };
 
 export const PositionControl = ({
-  currentStyle,
   property,
-  setProperty,
-  deleteProperty,
-  isAdvanced,
-}: ControlProps) => {
-  const { items } = styleConfigByName(property);
-  const styleInfo = currentStyle[property];
-  const value = toTuple(styleInfo?.value);
-  const styleSource = getStyleSource(styleInfo);
-  const keywords = items.map((item) => ({
+  styleDecl,
+}: {
+  property: CssProperty;
+  styleDecl: ComputedStyleDecl;
+}) => {
+  const value = toTuple(styleDecl.cascadedValue);
+  const keywords = (keywordValues[property] ?? []).map((value) => ({
     type: "keyword" as const,
-    value: item.name,
+    value,
   }));
 
   const setValue = setProperty(property);
@@ -74,12 +79,11 @@ export const PositionControl = ({
 
   return (
     <Flex direction="column" gap="1">
-      <NonResetablePropertyName
-        style={currentStyle}
-        properties={[property]}
+      <PropertyInlineLabel
         label="Position"
+        description={propertyDescriptions[camelCaseProperty(property)]}
+        properties={[property]}
       />
-
       <Flex gap="6">
         <PositionGrid
           selectedPosition={toPosition(value)}
@@ -94,44 +98,35 @@ export const PositionControl = ({
           }}
         />
         <Grid
-          css={{
-            gridTemplateColumns: "max-content 1fr",
-          }}
+          css={{ gridTemplateColumns: "max-content 1fr" }}
           align="center"
           gapX="2"
         >
-          <NonResetablePropertyName
-            style={currentStyle}
-            properties={[property]}
-            description="Left position offset"
+          <PropertyInlineLabel
             label="Left"
-          />
-
-          <CssValueInputContainer
-            property={property}
-            styleSource={styleSource}
-            keywords={keywords}
-            value={value.value[0]}
-            setValue={setValueX}
-            deleteProperty={deleteProperty}
-            disabled={isAdvanced}
-          />
-
-          <NonResetablePropertyName
-            style={currentStyle}
+            description="Left position offset"
             properties={[property]}
-            description="Top position offset"
-            label="Top"
           />
-
           <CssValueInputContainer
             property={property}
-            styleSource={styleSource}
-            keywords={keywords}
+            styleSource={styleDecl.source.name}
+            getOptions={() => keywords}
+            value={value.value[0]}
+            onUpdate={setValueX}
+            onDelete={(options) => deleteProperty(property, options)}
+          />
+          <PropertyInlineLabel
+            label="Top"
+            description="Top position offset"
+            properties={[property]}
+          />
+          <CssValueInputContainer
+            property={property}
+            styleSource={styleDecl.source.name}
+            getOptions={() => keywords}
             value={value.value[1]}
-            setValue={setValueY}
-            deleteProperty={deleteProperty}
-            disabled={isAdvanced}
+            onUpdate={setValueY}
+            onDelete={(options) => deleteProperty(property, options)}
           />
         </Grid>
       </Flex>

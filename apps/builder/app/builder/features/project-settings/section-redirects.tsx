@@ -1,38 +1,38 @@
+import { useStore } from "@nanostores/react";
 import {
-  Grid,
-  Flex,
-  InputField,
   Button,
-  Text,
-  theme,
+  Flex,
+  Grid,
+  InputErrorsTooltip,
+  InputField,
+  Link,
   List,
   ListItem,
-  SmallIconButton,
-  InputErrorsTooltip,
   Select,
-  Link,
-  truncate,
+  SmallIconButton,
+  Text,
+  theme,
   Tooltip,
 } from "@webstudio-is/design-system";
 import { ArrowRightIcon, TrashIcon } from "@webstudio-is/icons";
-import { useState, type ChangeEvent, useRef } from "react";
 import {
-  PagePath,
+  OldPagePath,
   PageRedirect,
   ProjectNewRedirectPath,
 } from "@webstudio-is/sdk";
-import { useStore } from "@nanostores/react";
-import { getExistingRoutePaths } from "../sidebar-left/panels/pages/page-utils";
+import { useRef, useState, type ChangeEvent } from "react";
+import { flushSync } from "react-dom";
+import { matchPathnamePattern } from "~/builder/shared/url-pattern";
 import { $pages, $publishedOrigin } from "~/shared/nano-states";
 import { serverSyncStore } from "~/shared/sync";
-import { flushSync } from "react-dom";
-import { sectionSpacing } from "./utils";
+import { getExistingRoutePaths, sectionSpacing } from "./utils";
 
 export const SectionRedirects = () => {
   const publishedOrigin = useStore($publishedOrigin);
   const [redirects, setRedirects] = useState(
     () => $pages.get()?.redirects ?? []
   );
+
   const [oldPath, setOldPath] = useState<string>("");
   const [newPath, setNewPath] = useState<string>("");
   const [httpStatus, setHttpStatus] =
@@ -58,7 +58,7 @@ export const SectionRedirects = () => {
   };
 
   const validateOldPath = (oldPath: string): string[] => {
-    const oldPathValidationResult = PagePath.safeParse(oldPath);
+    const oldPathValidationResult = OldPagePath.safeParse(oldPath);
 
     if (oldPathValidationResult.success === true) {
       if (oldPath.startsWith("/") === true) {
@@ -94,7 +94,13 @@ export const SectionRedirects = () => {
       }
 
       if (newPath.startsWith("/") === true) {
-        if (existingPaths.has(newPath) === false) {
+        let matched = false;
+        for (const pattern of existingPaths) {
+          if (matchPathnamePattern(pattern, newPath)) {
+            matched = true;
+          }
+        }
+        if (matched === false) {
           return ["This path doesn't exist in the project"];
         }
       }
@@ -218,7 +224,7 @@ export const SectionRedirects = () => {
       {redirectKeys.length > 0 ? (
         <Grid css={sectionSpacing}>
           <List asChild>
-            <Flex direction="column" gap="1">
+            <Flex direction="column" gap="1" align="stretch">
               {redirects.map((redirect, index) => {
                 return (
                   <ListItem asChild key={redirect.old} index={index}>
@@ -239,7 +245,10 @@ export const SectionRedirects = () => {
                               redirect.old,
                               publishedOrigin
                             ).toString()}
-                            css={truncate()}
+                            css={{
+                              width: theme.spacing[18],
+                              wordBreak: "break-all",
+                            }}
                             target="_blank"
                           >
                             {redirect.old}
@@ -256,19 +265,24 @@ export const SectionRedirects = () => {
                               redirect.new,
                               publishedOrigin
                             ).toString()}
-                            css={truncate()}
+                            css={{
+                              wordBreak: "break-all",
+                              maxWidth: theme.spacing[30],
+                            }}
                             target="_blank"
                           >
                             {redirect.new}
                           </Link>
                         </Tooltip>
                       </Flex>
-                      <SmallIconButton
-                        variant="destructive"
-                        icon={<TrashIcon />}
-                        aria-label={`Delete redirect from ${redirect.old}`}
-                        onClick={() => handleDeleteRedirect(index)}
-                      />
+                      <Flex gap="2">
+                        <SmallIconButton
+                          variant="destructive"
+                          icon={<TrashIcon />}
+                          aria-label={`Delete redirect from ${redirect.old}`}
+                          onClick={() => handleDeleteRedirect(index)}
+                        />
+                      </Flex>
                     </Flex>
                   </ListItem>
                 );

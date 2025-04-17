@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Breakpoint, Breakpoints } from "@webstudio-is/sdk";
 import {
-  EnhancedTooltip,
   Flex,
   Text,
   Toolbar,
@@ -10,7 +9,7 @@ import {
   Tooltip,
   theme,
 } from "@webstudio-is/design-system";
-import { AlertIcon, BpStarOffIcon, BpStarOnIcon } from "@webstudio-is/icons";
+import { AlertIcon, AsteriskIcon } from "@webstudio-is/icons";
 import { CascadeIndicator } from "./cascade-indicator";
 import {
   $selectedBreakpoint,
@@ -156,10 +155,11 @@ export const BreakpointsSelector = ({
         {groupBreakpoints(Array.from(breakpoints.values())).map(
           (breakpoint) => {
             return (
-              <EnhancedTooltip
+              <Tooltip
                 key={breakpoint.id}
                 content={getTooltipContent(breakpoint)}
                 variant="wrapped"
+                disableHoverableContent
               >
                 <ToolbarToggleItem
                   variant="subtle"
@@ -172,15 +172,11 @@ export const BreakpointsSelector = ({
                   }}
                   value={breakpoint.id}
                 >
-                  {breakpoint.minWidth ??
-                    breakpoint.maxWidth ??
-                    (breakpoint.id === selectedBreakpoint.id ? (
-                      <BpStarOnIcon size={22} />
-                    ) : (
-                      <BpStarOffIcon size={22} />
-                    ))}
+                  {breakpoint.minWidth ?? breakpoint.maxWidth ?? (
+                    <AsteriskIcon size={22} />
+                  )}
                 </ToolbarToggleItem>
-              </EnhancedTooltip>
+              </Tooltip>
             );
           }
         )}

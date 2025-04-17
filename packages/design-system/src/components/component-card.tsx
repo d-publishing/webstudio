@@ -3,7 +3,7 @@
  * https://www.figma.com/file/sfCE7iLS0k25qCxiifQNLE/%F0%9F%93%9A-Webstudio-Library?node-id=2608-8921
  */
 
-import { forwardRef, type ComponentProps } from "react";
+import { forwardRef, type ComponentProps, type JSX } from "react";
 import { css, theme } from "../stitches.config";
 import { textVariants } from "./text";
 import { Tooltip } from "./tooltip";
@@ -14,12 +14,12 @@ const cardStyle = css({
   flexDirection: "column",
   alignItems: "center",
   textAlign: "center",
-  px: theme.spacing[3],
-  width: theme.spacing[19],
-  height: theme.spacing[19],
+  padding: theme.spacing[3],
+  aspectRatio: "1",
   border: `1px solid`,
   borderColor: theme.colors.borderMain,
   borderRadius: theme.borderRadius[2],
+  outline: "none",
   userSelect: "none",
   color: theme.colors.foregroundIconMain,
   cursor: "grab",
@@ -31,9 +31,8 @@ const cardStyle = css({
     background: theme.colors.backgroundPanel,
     color: theme.colors.foregroundDisabled,
   },
-  "&:focus-visible, &[data-state=focus]": {
-    outline: `2px solid ${theme.colors.borderFocus}`,
-    outlineOffset: "-2px",
+  "&:focus-visible, &[data-state=selected]": {
+    borderColor: theme.colors.borderFocus,
   },
   "& svg": {
     flexGrow: 0,
@@ -63,7 +62,7 @@ type ComponentCardProps = {
   label: string;
   description?: string;
   icon: JSX.Element;
-  state?: "hover" | "disabled" | "focus";
+  state?: "hover" | "disabled" | "selected";
 } & ComponentProps<"div">;
 
 export const ComponentCard = forwardRef<HTMLDivElement, ComponentCardProps>(

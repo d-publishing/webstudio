@@ -9,35 +9,43 @@ import {
   Flex,
   List,
   ListItem,
-  focusRingStyle,
   Text,
 } from "@webstudio-is/design-system";
-import { $isProjectSettingsOpen } from "~/shared/nano-states/seo";
+import { $openProjectSettings } from "~/shared/nano-states/project-settings";
 import { SectionGeneral } from "./section-general";
 import { SectionRedirects } from "./section-redirects";
-import { useState } from "react";
+import { SectionPublish } from "./section-publish";
 import { SectionMarketplace } from "./section-marketplace";
 import { leftPanelWidth, rightPanelWidth } from "./utils";
+import type { FunctionComponent } from "react";
+import { $isDesignMode } from "~/shared/nano-states";
 
-const focusOutline = focusRingStyle();
+type SectionName = "general" | "redirects" | "publish" | "marketplace";
 
-const sectionNames = ["General", "Redirects", "Marketplace"];
-
-type SectionName = (typeof sectionNames)[number];
+const sections = new Map<SectionName, FunctionComponent>([
+  ["general", SectionGeneral],
+  ["redirects", SectionRedirects],
+  ["publish", SectionPublish],
+  ["marketplace", SectionMarketplace],
+] as const);
 
 export const ProjectSettingsView = ({
   currentSection,
   onSectionChange,
-  isOpen,
   onOpenChange,
 }: {
-  currentSection: SectionName;
+  currentSection?: SectionName;
   onSectionChange?: (section: SectionName) => void;
-  isOpen: boolean;
   onOpenChange?: (isOpen: boolean) => void;
 }) => {
+  const isDesignMode = useStore($isDesignMode);
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog
+      draggable
+      open={sections.has(currentSection!)}
+      onOpenChange={onOpenChange}
+    >
       <DialogContent
         css={{
           width: `calc(${leftPanelWidth} + ${rightPanelWidth})`,
@@ -45,81 +53,83 @@ export const ProjectSettingsView = ({
           height: theme.spacing[35],
         }}
       >
-        <Flex grow>
-          <List asChild>
-            <Flex
-              direction="column"
-              shrink={false}
-              css={{
-                width: leftPanelWidth,
-                borderRight: `1px solid  ${theme.colors.borderMain}`,
-              }}
-            >
-              {sectionNames.map((name, index) => {
-                return (
-                  <ListItem
-                    current={currentSection === name}
-                    asChild
-                    index={index}
-                    key={name}
-                    onSelect={() => {
-                      onSectionChange?.(name);
-                    }}
-                  >
-                    <Flex
-                      css={{
-                        position: "relative",
-                        height: theme.spacing[13],
-                        px: theme.spacing[9],
-                        outline: "none",
-                        "&:focus-visible": focusOutline,
-                        "&:hover": focusOutline,
-                        "&[aria-current=true]": {
-                          background: theme.colors.backgroundItemCurrent,
-                          color: theme.colors.foregroundMain,
-                        },
+        <fieldset style={{ display: "contents" }} disabled={!isDesignMode}>
+          <Flex grow>
+            <List asChild>
+              <Flex
+                direction="column"
+                shrink={false}
+                css={{
+                  width: leftPanelWidth,
+                  borderRight: `1px solid  ${theme.colors.borderMain}`,
+                }}
+              >
+                {Array.from(sections.keys()).map((name, index) => {
+                  return (
+                    <ListItem
+                      current={currentSection === name}
+                      asChild
+                      index={index}
+                      key={name}
+                      onSelect={() => {
+                        onSectionChange?.(name);
                       }}
-                      align="center"
                     >
-                      <Text variant="labelsSentenceCase" truncate>
-                        {name}
-                      </Text>
-                    </Flex>
-                  </ListItem>
-                );
-              })}
-            </Flex>
-          </List>
-          <ScrollArea>
-            <Grid gap={2} css={{ my: theme.spacing[5] }}>
-              {currentSection === "General" && <SectionGeneral />}
-              {currentSection === "Redirects" && <SectionRedirects />}
-              {currentSection === "Marketplace" && <SectionMarketplace />}
-              <div />
-            </Grid>
-          </ScrollArea>
-        </Flex>
-        {/* Title is at the end intentionally,
-         * to make the close button last in the tab order
-         */}
-        <DialogTitle>Project Settings</DialogTitle>
+                      <Flex
+                        css={{
+                          position: "relative",
+                          height: theme.spacing[13],
+                          paddingInline: theme.panel.paddingInline,
+                          outline: "none",
+                          "&:focus-visible, &:hover": {
+                            background: theme.colors.backgroundHover,
+                          },
+                          "&[aria-current=true]": {
+                            background: theme.colors.backgroundItemCurrent,
+                            color: theme.colors.foregroundMain,
+                          },
+                        }}
+                        align="center"
+                      >
+                        <Text variant="labelsTitleCase" truncate>
+                          {name}
+                        </Text>
+                      </Flex>
+                    </ListItem>
+                  );
+                })}
+              </Flex>
+            </List>
+            <ScrollArea>
+              <Grid gap={2} css={{ py: theme.spacing[5] }}>
+                {currentSection === "general" && <SectionGeneral />}
+                {currentSection === "redirects" && <SectionRedirects />}
+                {currentSection === "publish" && <SectionPublish />}
+                {currentSection === "marketplace" && <SectionMarketplace />}
+                <div />
+              </Grid>
+            </ScrollArea>
+          </Flex>
+          {/* Title is at the end intentionally,
+           * to make the close button last in the tab order
+           */}
+          <DialogTitle>Project Settings</DialogTitle>
+        </fieldset>
       </DialogContent>
     </Dialog>
   );
 };
 
 export const ProjectSettings = () => {
-  const isOpen = useStore($isProjectSettingsOpen);
-  const [currentSection, setCurrentSection] = useState<SectionName>(
-    sectionNames[0]
-  );
+  const currentSection = useStore($openProjectSettings);
 
   return (
     <ProjectSettingsView
-      isOpen={isOpen}
       currentSection={currentSection}
-      onSectionChange={setCurrentSection}
-      onOpenChange={$isProjectSettingsOpen.set}
+      onSectionChange={$openProjectSettings.set}
+      onOpenChange={(open) => {
+        $openProjectSettings.set(open ? "general" : undefined);
+      }}
     />
   );
 };

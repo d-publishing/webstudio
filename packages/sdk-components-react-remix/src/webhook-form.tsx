@@ -6,9 +6,7 @@ import {
   useEffect,
 } from "react";
 import { useFetcher, type Fetcher, type FormProps } from "@remix-run/react";
-import { formIdFieldName } from "@webstudio-is/form-handlers";
-import { getInstanceIdFromComponentProps } from "@webstudio-is/react-sdk";
-import { formBotFieldName } from "../../form-handlers/src/shared";
+import { formIdFieldName, formBotFieldName } from "@webstudio-is/sdk/runtime";
 
 export const defaultTag = "form";
 
@@ -80,11 +78,12 @@ const isJSDom = () => {
 
 export const WebhookForm = forwardRef<
   ElementRef<typeof defaultTag>,
-  ComponentProps<typeof defaultTag> & {
+  Omit<ComponentProps<typeof defaultTag>, "action"> & {
     /** Use this property to reveal the Success and Error states on the canvas so they can be styled. The Initial state is displayed when the page first opens. The Success and Error states are displayed depending on whether the Form submits successfully or unsuccessfully. */
     state?: State;
     encType?: FormProps["encType"];
     onStateChange?: (state: State) => void;
+    action?: string;
   }
 >(
   (
@@ -92,8 +91,6 @@ export const WebhookForm = forwardRef<
     ref
   ) => {
     const fetcher = useFetcher<{ success: boolean }>();
-
-    const instanceId = getInstanceIdFromComponentProps(rest);
 
     useOnFetchEnd(fetcher, (data) => {
       const state: State = data?.success === true ? "success" : "error";
@@ -123,7 +120,11 @@ export const WebhookForm = forwardRef<
         ref={ref}
         onSubmit={handleSubmitAndAddHiddenJsField}
       >
-        <input type="hidden" name={formIdFieldName} value={instanceId} />
+        <input
+          type="hidden"
+          name={formIdFieldName}
+          value={action?.toString()}
+        />
         {children}
       </fetcher.Form>
     );

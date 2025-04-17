@@ -1,7 +1,6 @@
 import { useId } from "react";
 import { useStore } from "@nanostores/react";
 import { Select } from "@webstudio-is/design-system";
-import { humanizeString } from "~/shared/string-utils";
 import {
   BindingControl,
   BindingPopover,
@@ -9,20 +8,19 @@ import {
 import {
   type ControlProps,
   VerticalLayout,
-  Label,
   $selectedInstanceScope,
   updateExpressionValue,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
+import { PropertyLabel } from "../property-label";
 
 export const SelectControl = ({
   meta,
   prop,
   propName,
   computedValue,
-  deletable,
   onChange,
-  onDelete,
 }: ControlProps<"select">) => {
   const id = useId();
 
@@ -33,7 +31,7 @@ export const SelectControl = ({
       ? meta.options
       : [value, ...meta.options];
 
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -44,16 +42,8 @@ export const SelectControl = ({
   return (
     <VerticalLayout
       label={
-        <Label
-          htmlFor={id}
-          description={meta.description}
-          readOnly={overwritable === false}
-        >
-          {label}
-        </Label>
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
       }
-      deletable={deletable}
-      onDelete={onDelete}
     >
       <BindingControl>
         <Select

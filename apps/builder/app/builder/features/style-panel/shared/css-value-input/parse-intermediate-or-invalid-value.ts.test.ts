@@ -1,13 +1,22 @@
-import { describe, test, expect } from "@jest/globals";
+import { describe, test, expect } from "vitest";
 import { parseIntermediateOrInvalidValue } from "./parse-intermediate-or-invalid-value";
-import { toKebabCase, toPascalCase } from "../keyword-utils";
 
-const properties = ["width", "lineHeight"] as const;
+const properties = ["width", "line-height"] as const;
 
-const propertiesAndKeywords = [
-  ["width", "auto" as string],
-  ["lineHeight", "normal" as string],
-] as const;
+test("forgive trailing semicolon", () => {
+  expect(
+    parseIntermediateOrInvalidValue("width", {
+      type: "intermediate",
+      value: "20px;",
+    })
+  ).toEqual({ type: "unit", value: 20, unit: "px" });
+  expect(
+    parseIntermediateOrInvalidValue("color", {
+      type: "intermediate",
+      value: "red;",
+    })
+  ).toEqual({ type: "keyword", value: "red" });
+});
 
 describe("Parse intermediate or invalid value without math evaluation", () => {
   test("not lost unit value", () => {
@@ -26,19 +35,30 @@ describe("Parse intermediate or invalid value without math evaluation", () => {
     }
   });
 
-  test("fallback to px", () => {
-    for (const propery of properties) {
-      const result = parseIntermediateOrInvalidValue(propery, {
-        type: "intermediate",
-        value: "10",
-      });
+  test.each(properties)(`fallback to px for property = "%s"`, (propery) => {
+    const result = parseIntermediateOrInvalidValue(propery, {
+      type: "intermediate",
+      value: "10",
+    });
 
-      expect(result).toEqual({
-        type: "unit",
-        value: 10,
-        unit: "px",
-      });
-    }
+    expect(result).toEqual({
+      type: "unit",
+      value: 10,
+      unit: "px",
+    });
+  });
+
+  test("fallback to % if px is not supported", () => {
+    const result = parseIntermediateOrInvalidValue("font-stretch", {
+      type: "intermediate",
+      value: "10",
+    });
+
+    expect(result).toEqual({
+      type: "unit",
+      value: 10,
+      unit: "%",
+    });
   });
 
   test("switch on new unit if previous not known", () => {
@@ -73,41 +93,41 @@ describe("Parse intermediate or invalid value without math evaluation", () => {
   });
 
   test("accept keywords", () => {
-    for (const [propery, keyword] of propertiesAndKeywords) {
-      const result = parseIntermediateOrInvalidValue(propery, {
+    expect(
+      parseIntermediateOrInvalidValue("width", {
         type: "intermediate",
-        value: keyword,
+        value: "auto",
         unit: "em",
-      });
-
-      expect(result).toEqual({
-        type: "keyword",
-        value: keyword,
-      });
-    }
+      })
+    ).toEqual({ type: "keyword", value: "auto" });
+    expect(
+      parseIntermediateOrInvalidValue("line-height", {
+        type: "intermediate",
+        value: "normal",
+        unit: "em",
+      })
+    ).toEqual({ type: "keyword", value: "normal" });
   });
 
   test("accept keywords written as pascal case", () => {
-    const pascalCaseKeywords = propertiesAndKeywords.map(
-      ([property, keyword]) => [property, toPascalCase(keyword)] as const
-    );
-
-    for (const [propery, keyword] of pascalCaseKeywords) {
-      const result = parseIntermediateOrInvalidValue(propery, {
+    expect(
+      parseIntermediateOrInvalidValue("width", {
         type: "intermediate",
-        value: keyword,
+        value: "Auto",
         unit: "em",
-      });
-
-      expect(result).toEqual({
-        type: "keyword",
-        value: toKebabCase(keyword),
-      });
-    }
+      })
+    ).toEqual({ type: "keyword", value: "auto" });
+    expect(
+      parseIntermediateOrInvalidValue("line-height", {
+        type: "intermediate",
+        value: "Normal",
+        unit: "em",
+      })
+    ).toEqual({ type: "keyword", value: "normal" });
   });
 
   test("keyword with pascal case name", () => {
-    const result = parseIntermediateOrInvalidValue("boxSizing", {
+    const result = parseIntermediateOrInvalidValue("box-sizing", {
       type: "intermediate",
       value: "Border Box",
       unit: "em",
@@ -116,6 +136,47 @@ describe("Parse intermediate or invalid value without math evaluation", () => {
     expect(result).toEqual({
       type: "keyword",
       value: "border-box",
+    });
+  });
+
+  test("tolerate comma instead of dot typo", () => {
+    const result = parseIntermediateOrInvalidValue("width", {
+      type: "intermediate",
+      value: "2,5",
+      unit: "rem",
+    });
+
+    expect(result).toEqual({
+      type: "unit",
+      value: 2.5,
+      unit: "rem",
+    });
+  });
+
+  test("tolerate comma instead of dot typo with unit input", () => {
+    const result = parseIntermediateOrInvalidValue("width", {
+      type: "intermediate",
+      value: "2,5rem",
+    });
+
+    expect(result).toEqual({
+      type: "unit",
+      value: 2.5,
+      unit: "rem",
+    });
+  });
+
+  test("tolerate comma instead of dot typo while correctly parsing legit comma inside value", () => {
+    const result = parseIntermediateOrInvalidValue("transition-duration", {
+      type: "intermediate",
+      value: "1s, 2s",
+    });
+    expect(result).toEqual({
+      type: "layers",
+      value: [
+        { type: "unit", unit: "s", value: 1 },
+        { type: "unit", unit: "s", value: 2 },
+      ],
     });
   });
 });
@@ -147,6 +208,36 @@ describe("Parse intermediate or invalid value with math evaluation", () => {
       expect(result).toEqual({
         type: "unit",
         value: 20,
+        unit: "px",
+      });
+    }
+  });
+
+  test("tolerate comma instead of dot", () => {
+    for (const propery of properties) {
+      const result = parseIntermediateOrInvalidValue(propery, {
+        type: "intermediate",
+        value: "1,1 + 1,2",
+      });
+
+      expect(result).toEqual({
+        type: "unit",
+        value: 2.3,
+        unit: "px",
+      });
+    }
+  });
+
+  test("tolerate comma instead of dot with unit", () => {
+    for (const propery of properties) {
+      const result = parseIntermediateOrInvalidValue(propery, {
+        type: "intermediate",
+        value: "1,1px + 1,2rem",
+      });
+
+      expect(result).toEqual({
+        type: "unit",
+        value: 2.3,
         unit: "px",
       });
     }
@@ -230,7 +321,7 @@ describe("Returns invalid if can't parse", () => {
   });
 
   test("do not accept wrong keywords", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "auto",
     });
@@ -244,7 +335,7 @@ describe("Returns invalid if can't parse", () => {
 
 describe("Value ending with `-` should be considered unitless", () => {
   test("Unitless intermediate transformed to unitless", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10-",
     });
@@ -257,7 +348,7 @@ describe("Value ending with `-` should be considered unitless", () => {
   });
 
   test("Unit intermediate transformed to unitless", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10-",
       unit: "em",
@@ -271,7 +362,7 @@ describe("Value ending with `-` should be considered unitless", () => {
   });
 
   test("Unit intermediate with space transformed to unitless", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10 -",
       unit: "em",
@@ -285,7 +376,7 @@ describe("Value ending with `-` should be considered unitless", () => {
   });
 
   test("Unit number intermediate transformed to unitless", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10",
       unit: "number",
@@ -299,7 +390,7 @@ describe("Value ending with `-` should be considered unitless", () => {
   });
 
   test("Unitless expression transformed to unitless", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10 + 20 -",
       unit: "px",
@@ -313,7 +404,7 @@ describe("Value ending with `-` should be considered unitless", () => {
   });
 
   test("Expression containing unit and unitless must be a unit", () => {
-    const result = parseIntermediateOrInvalidValue("lineHeight", {
+    const result = parseIntermediateOrInvalidValue("line-height", {
       type: "intermediate",
       value: "10px + 20 -",
       unit: "px",
@@ -445,5 +536,123 @@ describe("Colors", () => {
       g: 20,
       b: 30,
     });
+  });
+});
+
+test("parse css variable reference", () => {
+  expect(
+    parseIntermediateOrInvalidValue("color", {
+      type: "intermediate",
+      value: "var(--color)",
+    })
+  ).toEqual({
+    type: "var",
+    value: "color",
+  });
+});
+
+test("parse unit in css variable", () => {
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "10px",
+    })
+  ).toEqual({
+    type: "unit",
+    value: 10,
+    unit: "px",
+  });
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "10",
+      unit: "px",
+    })
+  ).toEqual({
+    type: "unit",
+    value: 10,
+    unit: "px",
+  });
+});
+
+test("prefer unitless css variable", () => {
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "1",
+      unit: undefined,
+    })
+  ).toEqual({ type: "unit", value: 1, unit: "number" });
+
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "1",
+      unit: "number",
+    })
+  ).toEqual({ type: "unit", value: 1, unit: "number" });
+});
+
+test("parse color in css variable", () => {
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "#0f0f0f",
+    })
+  ).toEqual({
+    type: "rgb",
+    r: 15,
+    g: 15,
+    b: 15,
+    alpha: 1,
+  });
+});
+
+test("parse css variables as unparsed", () => {
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "url(https://my-image.com)",
+    })
+  ).toEqual({
+    type: "unparsed",
+    value: "url(https://my-image.com)",
+  });
+  expect(
+    parseIntermediateOrInvalidValue("--size", {
+      type: "intermediate",
+      value: "url(https://my-image.com)",
+      unit: "px",
+    })
+  ).toEqual({
+    type: "unparsed",
+    value: "url(https://my-image.com)",
+  });
+});
+
+test("parse z-index", () => {
+  expect(
+    parseIntermediateOrInvalidValue("z-index", {
+      type: "intermediate",
+      value: "6.5",
+      unit: "number",
+    })
+  ).toEqual({
+    type: "unit",
+    value: 7,
+    unit: "number",
+  });
+});
+
+test("parse color", () => {
+  expect(
+    parseIntermediateOrInvalidValue("color", {
+      type: "intermediate",
+      value: "linear-gradient(red, blue)",
+      unit: undefined,
+    })
+  ).toEqual({
+    type: "invalid",
+    value: "linear-gradient(red, blue)",
   });
 });

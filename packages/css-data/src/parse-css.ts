@@ -1,6 +1,10 @@
 import { camelCase } from "change-case";
 import * as csstree from "css-tree";
-import { StyleValue, type StyleProperty } from "@webstudio-is/css-engine";
+import type {
+  StyleValue,
+  CssProperty,
+  StyleProperty,
+} from "@webstudio-is/css-engine";
 import { parseCssValue as parseCssValueLonghand } from "./parse-css-value";
 import { expandShorthands } from "./shorthands";
 
@@ -8,32 +12,8 @@ export type ParsedStyleDecl = {
   breakpoint?: string;
   selector: string;
   state?: string;
-  property: StyleProperty;
+  property: CssProperty;
   value: StyleValue;
-};
-
-/**
- * Store prefixed properties without change
- * and convert to camel case only unprefixed properties
- * @todo stop converting to camel case and use hyphenated format
- */
-const normalizePropertyName = (property: string) => {
-  // these are manually added with pascal case
-  // convert unprefixed used by webflow version into prefixed one
-  if (property === "-webkit-font-smoothing" || property === "font-smoothing") {
-    return "WebkitFontSmoothing";
-  }
-  if (property === "-moz-osx-font-smoothing") {
-    return "MozOsxFontSmoothing";
-  }
-  // webflow use unprefixed version
-  if (property === "tap-highlight-color") {
-    return "-webkit-tap-highlight-color";
-  }
-  if (property.startsWith("-")) {
-    return property;
-  }
-  return camelCase(property);
 };
 
 // @todo we don't parse correctly most of them if not all
@@ -48,20 +28,52 @@ const prefixedProperties = [
 const prefixes = ["webkit", "moz", "ms", "o"];
 const prefixRegex = new RegExp(`^-(${prefixes.join("|")})-`);
 
-const unprefixProperty = (property: string) => {
-  if (prefixedProperties.includes(property)) {
-    return property;
+const normalizeProperty = (property: string): CssProperty => {
+  // convert unprefixed used by webflow version into prefixed one
+  if (property === "tap-highlight-color") {
+    return "-webkit-tap-highlight-color";
   }
-  return property.replace(prefixRegex, "");
+  if (property === "font-smoothing") {
+    return "-webkit-font-smoothing";
+  }
+  if (prefixedProperties.includes(property)) {
+    return property as CssProperty;
+  }
+  // remove old or unexpected prefixes
+  return property.replace(prefixRegex, "") as CssProperty;
 };
 
-const parseCssValue = (
-  property: string,
-  value: string,
-  { customProperties }: { customProperties: boolean }
-): Map<StyleProperty, StyleValue> => {
+/**
+ * Store prefixed properties without change
+ * and convert to camel case only unprefixed properties
+ * @todo stop converting to camel case and use hyphenated format
+ */
+export const camelCaseProperty = (
+  property: CssProperty | StyleProperty
+): StyleProperty => {
+  property = normalizeProperty(property) as CssProperty | StyleProperty;
+  // these are manually added with pascal case
+  if (
+    property === "-webkit-font-smoothing" ||
+    property === "WebkitFontSmoothing"
+  ) {
+    return "WebkitFontSmoothing";
+  }
+  if (
+    property === "-moz-osx-font-smoothing" ||
+    property === "MozOsxFontSmoothing"
+  ) {
+    return "MozOsxFontSmoothing";
+  }
+  if (property.startsWith("-")) {
+    return property as StyleProperty;
+  }
+  return camelCase(property) as StyleProperty;
+};
+
+const parseCssValue = (property: CssProperty, value: string) => {
   const expanded = new Map(expandShorthands([[property, value]]));
-  const final = new Map();
+  const final = new Map<CssProperty, StyleValue>();
   for (const [property, value] of expanded) {
     if (value === "") {
       // Keep the browser behavior when property is defined with an empty value e.g. `color:;`
@@ -70,19 +82,7 @@ const parseCssValue = (
       continue;
     }
 
-    // @todo https://github.com/webstudio-is/webstudio/issues/3399
-    if (customProperties === false && value.startsWith("var(")) {
-      final.set(property, { type: "keyword", value: "unset" });
-      continue;
-    }
-
-    final.set(
-      property,
-      parseCssValueLonghand(
-        normalizePropertyName(property) as StyleProperty,
-        value
-      )
-    );
+    final.set(property, parseCssValueLonghand(property, value));
   }
   return final;
 };
@@ -101,12 +101,7 @@ type Selector = {
   state?: string;
 };
 
-type ParserOptions = {
-  customProperties?: boolean;
-};
-
-export const parseCss = (css: string, options: ParserOptions = {}) => {
-  const customProperties = options.customProperties ?? false;
+export const parseCss = (css: string): ParsedStyleDecl[] => {
   const ast = cssTreeTryParse(css);
   const styles = new Map<string, ParsedStyleDecl>();
 
@@ -161,6 +156,7 @@ export const parseCss = (css: string, options: ParserOptions = {}) => {
           if (node.type === "MediaQuery" && node.children.size > 1) {
             invalidBreakpoint = true;
           }
+          ``;
         },
       });
       const generated = csstree.generate(this.atrule.prelude);
@@ -168,55 +164,86 @@ export const parseCss = (css: string, options: ParserOptions = {}) => {
         breakpoint = generated;
       }
     }
-    if (invalidBreakpoint) {
+    if (invalidBreakpoint || this.rule.prelude.type !== "SelectorList") {
       return;
     }
 
     const selectors: Selector[] = [];
-    csstree.walk(this.rule.prelude, (node, item) => {
-      if (node.type !== "ClassSelector" && node.type !== "TypeSelector") {
-        return;
-      }
-      // We don't support nesting yet.
-      if (
-        (item?.prev && item.prev.data.type === "Combinator") ||
-        (item?.next && item.next.data.type === "Combinator")
-      ) {
-        return;
-      }
 
-      if (item?.next && item.next.data.type === "PseudoElementSelector") {
-        selectors.push({
-          name: node.name,
-          state: `::${item.next.data.name}`,
-        });
-      } else if (item?.next && item.next.data.type === "PseudoClassSelector") {
-        selectors.push({
-          name: node.name,
-          state: `:${item.next.data.name}`,
-        });
-      } else {
-        selectors.push({
-          name: node.name,
-        });
+    for (const node of this.rule.prelude.children) {
+      if (node.type !== "Selector") {
+        continue;
       }
-    });
+      let selector: Selector | undefined = undefined;
+      const children = node.children.toArray();
+      // @ts-expect-error NestingSelector is not defined in type definitions
+      const startsWithNesting = children[0]?.type === "NestingSelector";
+      for (let index = 0; index < children.length; index += 1) {
+        const childNode = children[index];
+        let name: string = "";
+        let state: string | undefined;
+        switch (childNode.type) {
+          case "TypeSelector":
+            name = childNode.name;
+            break;
+          case "ClassSelector":
+            name = `.${childNode.name}`;
+            break;
+          case "AttributeSelector":
+            // for example &[data-state=active]
+            if (startsWithNesting && index === 1 && children.length === 2) {
+              state = csstree.generate(childNode);
+            } else {
+              name = csstree.generate(childNode);
+            }
+            break;
+          case "PseudoClassSelector": {
+            // First pseudo selector is not a state but an element selector, e.g. :root
+            if (selector) {
+              state = `:${childNode.name}`;
+            } else {
+              name = `:${childNode.name}`;
+            }
+            break;
+          }
+          case "PseudoElementSelector":
+            state = `::${childNode.name}`;
+            break;
+          case "Combinator":
+            // " " vs " > "
+            name =
+              childNode.name === " " ? childNode.name : ` ${childNode.name} `;
+            break;
+        }
+
+        if (selector) {
+          selector.name += name;
+          if (state) {
+            selector.state = state;
+          }
+        } else {
+          selector = { name, state };
+        }
+      }
+      if (selector) {
+        selectors.push(selector);
+        selector = undefined;
+      }
+    }
 
     const stringValue = csstree.generate(node.value);
 
     const parsedCss = parseCssValue(
-      unprefixProperty(node.property),
-      stringValue,
-      { customProperties }
+      normalizeProperty(node.property),
+      stringValue
     );
 
     for (const { name: selector, state } of selectors) {
       for (const [property, value] of parsedCss) {
+        const normalizedProperty = normalizeProperty(property);
         const styleDecl: ParsedStyleDecl = {
           selector,
-          property: normalizePropertyName(
-            unprefixProperty(property)
-          ) as StyleProperty,
+          property: normalizedProperty,
           value,
         };
         if (breakpoint) {
@@ -227,7 +254,10 @@ export const parseCss = (css: string, options: ParserOptions = {}) => {
         }
 
         // deduplicate styles within selector and state by using map
-        styles.set(`${breakpoint}:${selector}:${state}:${property}`, styleDecl);
+        styles.set(
+          `${breakpoint}:${selector}:${state}:${normalizedProperty}`,
+          styleDecl
+        );
       }
     }
   });

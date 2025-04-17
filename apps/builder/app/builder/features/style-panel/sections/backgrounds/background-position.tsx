@@ -1,41 +1,59 @@
-import { keywordValues } from "@webstudio-is/css-data";
+import type { StyleValue } from "@webstudio-is/css-engine";
+import { propertyDescriptions } from "@webstudio-is/css-data";
 import { Flex, Grid, PositionGrid } from "@webstudio-is/design-system";
-import { getStyleSource, type StyleInfo } from "../../shared/style-info";
 import { CssValueInputContainer } from "../../shared/css-value-input";
-import { NonResetablePropertyName } from "../../shared/property-name";
-import type { DeleteProperty, SetProperty } from "../../shared/use-style-data";
+import { PropertyInlineLabel } from "../../property-label";
+import { useComputedStyles } from "../../shared/model";
+import {
+  getRepeatedStyleItem,
+  setRepeatedStyleItem,
+} from "../../shared/repeated-style";
 
-export const BackgroundPosition = ({
-  currentStyle,
-  setProperty,
-  deleteProperty,
-}: {
-  currentStyle: StyleInfo;
-  setProperty: SetProperty;
-  deleteProperty: DeleteProperty;
-}) => {
-  const xInfo = currentStyle.backgroundPositionX;
-  const x = xInfo?.value.type === "unit" ? xInfo.value.value : 0;
-  const yInfo = currentStyle.backgroundPositionY;
-  const y = yInfo?.value.type === "unit" ? yInfo.value.value : 0;
+const keyworkToValue: Record<string, number> = {
+  left: 0,
+  right: 100,
+  center: 50,
+  top: 0,
+  bottom: 100,
+};
+
+const calculateBackgroundPosition = (value: undefined | StyleValue) => {
+  if (value?.type === "unit") {
+    return value.value;
+  }
+  if (value?.type === "keyword") {
+    return keyworkToValue[value.value];
+  }
+  return 0;
+};
+
+export const BackgroundPosition = ({ index }: { index: number }) => {
+  const [backgroundPositionX, backgroundPositionY] = useComputedStyles([
+    "background-position-x",
+    "background-position-y",
+  ]);
+  const xValue = getRepeatedStyleItem(backgroundPositionX, index);
+  const yValue = getRepeatedStyleItem(backgroundPositionY, index);
+  const x = calculateBackgroundPosition(xValue);
+  const y = calculateBackgroundPosition(yValue);
 
   return (
     <Flex direction="column" gap="1">
-      <NonResetablePropertyName
-        style={currentStyle}
-        properties={["backgroundPositionX", "backgroundPositionY"]}
+      <PropertyInlineLabel
         label="Position"
+        description={propertyDescriptions.backgroundPosition}
+        properties={["background-position-x", "background-position-y"]}
       />
       <Flex gap="6">
         <PositionGrid
           selectedPosition={{ x, y }}
           onSelect={({ x, y }) => {
-            setProperty("backgroundPositionX")({
+            setRepeatedStyleItem(backgroundPositionX, index, {
               type: "unit",
               value: x,
               unit: "%",
             });
-            setProperty("backgroundPositionY")({
+            setRepeatedStyleItem(backgroundPositionY, index, {
               type: "unit",
               value: y,
               unit: "%",
@@ -47,39 +65,51 @@ export const BackgroundPosition = ({
           align="center"
           gapX="2"
         >
-          <NonResetablePropertyName
-            style={currentStyle}
-            properties={["backgroundPositionX"]}
-            description="Left position offset"
+          <PropertyInlineLabel
             label="Left"
+            description="Left position offset"
+            properties={["background-position-x"]}
           />
           <CssValueInputContainer
-            property="backgroundPositionX"
-            styleSource={getStyleSource(xInfo)}
-            keywords={keywordValues.backgroundPositionX.map((value) => ({
-              type: "keyword",
-              value,
-            }))}
-            value={xInfo?.value}
-            setValue={setProperty("backgroundPositionX")}
-            deleteProperty={deleteProperty}
+            property="background-position-x"
+            styleSource="default"
+            getOptions={() => [
+              { type: "keyword", value: "center" },
+              { type: "keyword", value: "left" },
+              { type: "keyword", value: "right" },
+            ]}
+            value={xValue}
+            onUpdate={(value, options) => {
+              setRepeatedStyleItem(backgroundPositionX, index, value, options);
+            }}
+            onDelete={() => {
+              if (xValue) {
+                setRepeatedStyleItem(backgroundPositionX, index, xValue);
+              }
+            }}
           />
-          <NonResetablePropertyName
-            style={currentStyle}
-            properties={["backgroundPositionY"]}
-            description="Top position offset"
+          <PropertyInlineLabel
             label="Top"
+            description="Top position offset"
+            properties={["background-position-y"]}
           />
           <CssValueInputContainer
-            property="backgroundPositionY"
-            styleSource={getStyleSource(yInfo)}
-            keywords={keywordValues.backgroundPositionY.map((value) => ({
-              type: "keyword",
-              value,
-            }))}
-            value={yInfo?.value}
-            setValue={setProperty("backgroundPositionY")}
-            deleteProperty={deleteProperty}
+            property="background-position-y"
+            styleSource="default"
+            getOptions={() => [
+              { type: "keyword", value: "center" },
+              { type: "keyword", value: "top" },
+              { type: "keyword", value: "bottom" },
+            ]}
+            value={yValue}
+            onUpdate={(value, options) => {
+              setRepeatedStyleItem(backgroundPositionY, index, value, options);
+            }}
+            onDelete={() => {
+              if (yValue) {
+                setRepeatedStyleItem(backgroundPositionY, index, yValue);
+              }
+            }}
           />
         </Grid>
       </Flex>

@@ -1,5 +1,5 @@
 import type { PropItem } from "react-docgen-typescript";
-import { PropMeta } from "@webstudio-is/react-sdk";
+import { PropMeta } from "@webstudio-is/sdk";
 
 export type FilterPredicate = (prop: PropItem) => boolean;
 
@@ -16,6 +16,7 @@ export const propsToArgTypes = (
       // Exclude webstudio builder props see react-sdk/src/tree/webstudio-component.tsx
       .filter(([propName]) => propName.startsWith("data-ws-") === false)
       .filter(([propName]) => propName.startsWith("$webstudio") === false)
+      .filter(([propName]) => propName.startsWith("$") === false)
       // Exclude props that are in the exclude list
       .filter(([propName]) => exclude.includes(propName) === false)
       .map(([propName, propItem]) => {
@@ -48,7 +49,7 @@ const matchers = {
 export const getArgType = (propItem: PropItem): PropMeta | undefined => {
   const { type, name, description, defaultValue } = propItem;
 
-  // eslint-disable-next-line @typescript-eslint/ban-types
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type
   const makePropMeta = (type: string, control: string, extra?: {}) => {
     let value = defaultValue?.value;
     // react-docgen-typescript incorrectly parse jsdoc default values as strings

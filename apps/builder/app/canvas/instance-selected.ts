@@ -1,11 +1,13 @@
+import { shallowEqual } from "shallow-equal";
+import warnOnce from "warn-once";
 import type { Instance } from "@webstudio-is/sdk";
-import { idAttribute, selectorIdAttribute } from "@webstudio-is/react-sdk";
+import type { CssProperty, UnitValue } from "@webstudio-is/css-engine";
+import { propertiesData } from "@webstudio-is/css-data";
+import { selectorIdAttribute } from "@webstudio-is/react-sdk";
 import { subscribeWindowResize } from "~/shared/dom-hooks";
 import {
   $isResizingCanvas,
-  $selectedInstanceBrowserStyle,
-  $selectedInstanceIntanceToTag,
-  $selectedInstanceUnitSizes,
+  $selectedInstanceSizes,
   $selectedInstanceRenderState,
   $stylesIndex,
   $instances,
@@ -14,21 +16,23 @@ import {
   $styles,
   $selectedInstanceStates,
   $styleSourceSelections,
+  type UnitSizes,
+  type PropertySizes,
 } from "~/shared/nano-states";
-import htmlTags, { type htmlTags as HtmlTags } from "html-tags";
 import {
   getAllElementsBoundingBox,
-  getElementsByInstanceSelector,
+  getVisibleElementsByInstanceSelector,
+  getAllElementsByInstanceSelector,
+  scrollIntoView,
+  hasDoNotTrackMutationRecord,
 } from "~/shared/dom-utils";
 import { subscribeScrollState } from "~/canvas/shared/scroll-state";
 import { $selectedInstanceOutline } from "~/shared/nano-states";
-import type { UnitSizes } from "~/builder/features/style-panel/shared/css-value-input/convert-units";
-import { setDataCollapsed } from "~/canvas/collapsed";
-import { getBrowserStyle } from "./features/webstudio-component/get-browser-style";
+import {
+  hasCollapsedMutationRecord,
+  setDataCollapsed,
+} from "~/canvas/collapsed";
 import type { InstanceSelector } from "~/shared/tree-utils";
-
-const isHtmlTag = (tag: string): tag is HtmlTags =>
-  htmlTags.includes(tag as HtmlTags);
 
 const setOutline = (instanceId: Instance["id"], elements: HTMLElement[]) => {
   $selectedInstanceOutline.set({
@@ -75,6 +79,30 @@ const calculateUnitSizes = (element: HTMLElement): UnitSizes => {
   };
 };
 
+const calculatePropertySizes = (element: HTMLElement) => {
+  const computedStyle = getComputedStyle(element);
+  const propertySizes: PropertySizes = {};
+  for (const property in propertiesData) {
+    try {
+      const propertyValue = computedStyle.getPropertyValue(property);
+      const value = CSSStyleValue.parse(property, propertyValue);
+      if (value instanceof CSSUnitValue) {
+        propertySizes[property as CssProperty] = {
+          type: "unit",
+          // px | number | percent etc
+          unit:
+            value.unit === "percent" ? "%" : (value.unit as UnitValue["unit"]),
+          value: value.value,
+        };
+      }
+    } catch (error) {
+      // failed with unknown property like -moz-osx-font-smoothing
+      // also firefox does not support CSSStyleValue
+    }
+  }
+  return propertySizes;
+};
+
 const subscribeSelectedInstance = (
   selectedInstanceSelector: Readonly<InstanceSelector>,
   debounceEffect: (callback: () => void) => void
@@ -84,25 +112,31 @@ const subscribeSelectedInstance = (
   }
 
   const instanceId = selectedInstanceSelector[0];
-  // setDataCollapsed
 
-  let elements = getElementsByInstanceSelector(selectedInstanceSelector);
+  let visibleElements = getVisibleElementsByInstanceSelector(
+    selectedInstanceSelector
+  );
 
-  elements[0]?.scrollIntoView({
-    behavior: "smooth",
-    block: "nearest",
-  });
+  const updateScroll = () => {
+    const bbox = getAllElementsBoundingBox(visibleElements);
+    if (visibleElements.length === 0) {
+      return;
+    }
+    scrollIntoView(visibleElements[0], bbox);
+  };
 
   const updateElements = () => {
-    elements = getElementsByInstanceSelector(selectedInstanceSelector);
+    visibleElements = getVisibleElementsByInstanceSelector(
+      selectedInstanceSelector
+    );
   };
 
   const updateDataCollapsed = () => {
-    if (elements.length === 0) {
+    if (visibleElements.length === 0) {
       return;
     }
 
-    for (const element of elements) {
+    for (const element of visibleElements) {
       const selectorId = element.getAttribute(selectorIdAttribute);
       if (selectorId === null) {
         continue;
@@ -127,40 +161,24 @@ const subscribeSelectedInstance = (
     if ($isResizingCanvas.get()) {
       return;
     }
-    setOutline(instanceId, elements);
+    setOutline(instanceId, visibleElements);
   };
   // effect close to rendered element also catches dnd remounts
   // so actual state is always provided here
   showOutline();
 
   const updateStores = () => {
+    const elements = getAllElementsByInstanceSelector(selectedInstanceSelector);
+
     if (elements.length === 0) {
       return;
     }
 
     const [element] = elements;
     // trigger style recomputing every time instance styles are changed
-    $selectedInstanceBrowserStyle.set(getBrowserStyle(element));
-
-    // Map self and ancestor instance ids to tag names
-    const instanceToTag = new Map<Instance["id"], HtmlTags>();
-    for (
-      let ancestorOrSelf: HTMLElement | null = element;
-      ancestorOrSelf !== null;
-      ancestorOrSelf = ancestorOrSelf.parentElement
-    ) {
-      const tagName = ancestorOrSelf.tagName.toLowerCase();
-      const instanceId = ancestorOrSelf.getAttribute(idAttribute);
-
-      if (isHtmlTag(tagName) && instanceId !== null) {
-        instanceToTag.set(instanceId, tagName);
-      }
-    }
-
-    $selectedInstanceIntanceToTag.set(instanceToTag);
-
     const unitSizes = calculateUnitSizes(element);
-    $selectedInstanceUnitSizes.set(unitSizes);
+    const propertySizes = calculatePropertySizes(element);
+    $selectedInstanceSizes.set({ unitSizes, propertySizes });
 
     const availableStates = new Set<string>();
     const instanceStyleSourceIds = new Set(
@@ -177,19 +195,24 @@ const subscribeSelectedInstance = (
     }
     const activeStates = new Set<string>();
     for (const state of availableStates) {
-      if (element.matches(state)) {
-        activeStates.add(state);
+      try {
+        // pseudo classes like :open or :current are not supported in .matches method
+        if (element.matches(state)) {
+          activeStates.add(state);
+        }
+      } catch {
+        warnOnce(true, `state selector "${state}" is invalid`);
       }
     }
-    $selectedInstanceStates.set(activeStates);
+
+    if (
+      !shallowEqual(activeStates.keys(), $selectedInstanceStates.get().keys())
+    ) {
+      $selectedInstanceStates.set(activeStates);
+    }
   };
 
   let updateStoreTimeouHandle: undefined | ReturnType<typeof setTimeout>;
-
-  const updateStoresDebounced = () => {
-    clearTimeout(updateStoreTimeouHandle);
-    updateStoreTimeouHandle = setTimeout(updateStores, 100);
-  };
 
   const update = () => {
     debounceEffect(() => {
@@ -201,37 +224,56 @@ const subscribeSelectedInstance = (
       // getBoundingClientRect is used instead.
       showOutline();
 
-      // Cause serious performance issues, use debounced version
-      // The result of stores is not needed immediately
-      updateStoresDebounced();
+      updateStores();
 
       // Having that elements can be changed (i.e. div => address tag change, observe again)
       updateObservers();
     });
   };
 
+  // update scroll state
+  updateScroll();
+
   // Lightweight update
-  const updateOutline = () => {
+  const updateOutline: MutationCallback = (mutationRecords) => {
+    if (hasCollapsedMutationRecord(mutationRecords)) {
+      return;
+    }
+
     showOutline();
   };
 
   const resizeObserver = new ResizeObserver(update);
 
+  const mutationHandler: MutationCallback = (mutationRecords) => {
+    if (hasDoNotTrackMutationRecord(mutationRecords)) {
+      return;
+    }
+
+    if (hasCollapsedMutationRecord(mutationRecords)) {
+      return;
+    }
+
+    update();
+  };
+
   // detect movement of the element within same parent
   // React prevent remount when key stays the same
   // `attributes: true` fixes issues with popups after trigger text editing
   // that cause radix to incorrectly set content in a wrong position at first render
-  const mutationObserver = new MutationObserver(update);
+  const mutationObserver = new MutationObserver(mutationHandler);
 
   const updateObservers = () => {
-    for (const element of elements) {
+    for (const element of visibleElements) {
       resizeObserver.observe(element);
 
       const parent = element?.parentElement;
+
       if (parent) {
         mutationObserver.observe(parent, {
           childList: true,
           attributes: true,
+          attributeOldValue: true,
           attributeFilter: ["style", "class"],
         });
       }
@@ -239,9 +281,11 @@ const subscribeSelectedInstance = (
   };
 
   const bodyStyleMutationObserver = new MutationObserver(updateOutline);
+
   // previewStyle variables
   bodyStyleMutationObserver.observe(document.body, {
     attributes: true,
+    attributeOldValue: true,
     attributeFilter: ["style", "class"],
   });
 
@@ -284,7 +328,7 @@ const subscribeSelectedInstance = (
   return () => {
     clearTimeout(updateStoreTimeouHandle);
     hideOutline();
-    $selectedInstanceRenderState.set("pending");
+    $selectedInstanceRenderState.set("notMounted");
     resizeObserver.disconnect();
     mutationObserver.disconnect();
     bodyStyleMutationObserver.disconnect();

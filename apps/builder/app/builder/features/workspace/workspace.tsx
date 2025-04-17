@@ -1,32 +1,32 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { useStore } from "@nanostores/react";
-import { theme, Toaster, css, type CSS } from "@webstudio-is/design-system";
+import { theme, Toaster, css } from "@webstudio-is/design-system";
 import {
   $canvasWidth,
   $scale,
   $workspaceRect,
 } from "~/builder/shared/nano-states";
-import {
-  $selectedInstanceSelector,
-  $textEditingInstanceSelector,
-} from "~/shared/nano-states";
+import { $textEditingInstanceSelector } from "~/shared/nano-states";
 import { CanvasTools } from "./canvas-tools";
 import { useSetCanvasWidth } from "../breakpoints";
+import { selectInstance } from "~/shared/awareness";
+import { ResizeHandles } from "./canvas-tools/resize-handles";
+import { MediaBadge } from "./canvas-tools/media-badge";
 
 const workspaceStyle = css({
   flexGrow: 1,
   background: theme.colors.backgroundCanvas,
   position: "relative",
   // Prevent scrollIntoView from scrolling the whole page
-  overflow: "clip",
-  // This spacing is needed to still be able to grab the canvas edge, otherwise you will always drag
-  // the browser window instead of the canvas.
-  px: theme.spacing[5],
+  // Commented to see what it will break
+  // overflow: "clip",
 });
 
 const canvasContainerStyle = css({
   position: "absolute",
   transformOrigin: "0 0",
+  // We had a case where some Windows 10 + Chrome 129 users couldn't scroll iframe canvas.
+  willChange: "transform",
 });
 
 const useMeasureWorkspace = () => {
@@ -56,7 +56,8 @@ const getCanvasStyle = (
 ) => {
   let canvasHeight;
 
-  if (workspaceRect?.height) {
+  // For some reason scale is 0 in chrome dev tools mobile touch simulated vervsion.
+  if (workspaceRect?.height && scale !== 0) {
     canvasHeight = workspaceRect.height / (scale / 100);
   }
 
@@ -84,7 +85,6 @@ const useOutlineStyle = () => {
 
   return {
     ...style,
-    pointerEvents: "none",
     width:
       canvasWidth === undefined ? "100%" : (canvasWidth ?? 0) * (scale / 100),
   } as const;
@@ -92,41 +92,54 @@ const useOutlineStyle = () => {
 
 type WorkspaceProps = {
   children: ReactNode;
-  onTransitionEnd: () => void;
-  css: CSS;
 };
 
-export const Workspace = ({
-  children,
-  onTransitionEnd,
-  css,
-}: WorkspaceProps) => {
+export const Workspace = ({ children }: WorkspaceProps) => {
   const canvasStyle = useCanvasStyle();
-  const outlineStyle = useOutlineStyle();
   const workspaceRef = useMeasureWorkspace();
   useSetCanvasWidth();
   const handleWorkspaceClick = () => {
-    $selectedInstanceSelector.set(undefined);
+    selectInstance(undefined);
     $textEditingInstanceSelector.set(undefined);
   };
+  const outlineStyle = useOutlineStyle();
 
   return (
-    <div
-      className={workspaceStyle({ css })}
-      onClick={handleWorkspaceClick}
-      ref={workspaceRef}
-    >
+    <>
       <div
-        className={canvasContainerStyle()}
-        style={canvasStyle}
-        onTransitionEnd={onTransitionEnd}
+        className={workspaceStyle()}
+        onClick={handleWorkspaceClick}
+        ref={workspaceRef}
       >
-        {children}
+        <div className={canvasContainerStyle()} style={canvasStyle}>
+          {children}
+        </div>
+        <div
+          data-name="canvas-tools-wrapper"
+          className={canvasContainerStyle({ css: { pointerEvents: "none" } })}
+          style={outlineStyle}
+        >
+          <MediaBadge />
+          <ResizeHandles />
+        </div>
       </div>
-      <div className={canvasContainerStyle()} style={outlineStyle}>
+    </>
+  );
+};
+
+export const CanvasToolsContainer = () => {
+  const outlineStyle = useOutlineStyle();
+
+  return (
+    <>
+      <div
+        data-name="canvas-tools-wrapper"
+        className={canvasContainerStyle()}
+        style={outlineStyle}
+      >
         <CanvasTools />
       </div>
       <Toaster />
-    </div>
+    </>
   );
 };

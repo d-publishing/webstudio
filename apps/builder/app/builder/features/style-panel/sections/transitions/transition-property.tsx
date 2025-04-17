@@ -1,11 +1,9 @@
 import { useState, useEffect } from "react";
+import { computed } from "nanostores";
+import { useStore } from "@nanostores/react";
+import { matchSorter } from "match-sorter";
+import { animatableProperties } from "@webstudio-is/css-data";
 import {
-  animatableProperties,
-  commonTransitionProperties,
-  isAnimatableProperty,
-} from "@webstudio-is/css-data";
-import {
-  Label,
   InputField,
   ComboboxRoot,
   ComboboxAnchor,
@@ -16,9 +14,6 @@ import {
   ComboboxListboxItem,
   ComboboxSeparator,
   NestedInputButton,
-  Tooltip,
-  Text,
-  Flex,
   ComboboxScrollArea,
 } from "@webstudio-is/design-system";
 import {
@@ -27,31 +22,76 @@ import {
   type StyleValue,
   type UnparsedValue,
 } from "@webstudio-is/css-engine";
-import { matchSorter } from "match-sorter";
 import { setUnion } from "~/shared/shim";
+import { $computedStyleDeclarations } from "../../shared/model";
+
+type AnimatableProperty = (typeof animatableProperties)[number];
+
+const commonTransitionProperties = [
+  "all",
+  "opacity",
+  "margin",
+  "padding",
+  "border",
+  "transform",
+  "filter",
+  "flex",
+  "background-color",
+];
+
+const isAnimatableProperty = (
+  property: string
+): property is AnimatableProperty => {
+  if (property === "all") {
+    return true;
+  }
+
+  return [...commonTransitionProperties, ...animatableProperties].some(
+    (item) => item === property
+  );
+};
 
 type AnimatableProperties = (typeof animatableProperties)[number];
 type NameAndLabel = { name: string; label?: string };
 type TransitionPropertyProps = {
-  property: StyleValue;
-  onPropertySelection: (params: {
-    property: KeywordValue | UnparsedValue;
-  }) => void;
+  value: StyleValue;
+  onChange: (value: KeywordValue | UnparsedValue) => void;
 };
 
 const commonPropertiesSet = new Set(commonTransitionProperties);
 
-const properties = Array.from(
-  setUnion(commonPropertiesSet, new Set(animatableProperties))
+/**
+ * animatable and inherited properties
+ * on current breakpoints across all states
+ */
+const $animatableDefinedProperties = computed(
+  [$computedStyleDeclarations],
+  (computedStyleDeclarations) => {
+    const animatableProperties = new Set<string>();
+    for (const { property } of computedStyleDeclarations) {
+      if (isAnimatableProperty(property)) {
+        animatableProperties.add(property);
+      }
+    }
+    return animatableProperties;
+  }
 );
 
 export const TransitionProperty = ({
-  property,
-  onPropertySelection,
+  value,
+  onChange,
 }: TransitionPropertyProps) => {
-  const valueString = toValue(property);
-  const [inputValue, setInputValue] = useState(valueString);
+  const animatableDefinedProperties = useStore($animatableDefinedProperties);
+  const valueString = toValue(value);
+  const [inputValue, setInputValue] = useState<string>(valueString);
   useEffect(() => setInputValue(valueString), [valueString]);
+
+  const properties = Array.from(
+    setUnion(
+      setUnion(animatableDefinedProperties, commonPropertiesSet),
+      new Set(animatableProperties)
+    )
+  );
 
   const {
     items,
@@ -62,27 +102,23 @@ export const TransitionProperty = ({
     getMenuProps,
     getItemProps,
   } = useCombobox<NameAndLabel>({
-    items: properties.map((prop) => ({
-      name: prop,
-      label: prop,
-    })),
+    getItems: () =>
+      properties.map((prop) => ({
+        name: prop,
+        label: prop === "transform" ? `${prop} (rotate, skew)` : prop,
+      })),
     value: { name: inputValue as AnimatableProperties, label: inputValue },
     selectedItem: undefined,
     itemToString: (value) => value?.label || "",
-    onItemSelect: (prop) => {
-      if (isAnimatableProperty(prop.name) === false) {
-        return;
-      }
-      setInputValue(prop.name);
-      onPropertySelection({ property: { type: "unparsed", value: prop.name } });
-    },
-    onInputChange: (value) => setInputValue(value ?? ""),
-    /*
-      We are splitting the items into two lists.
-      But when users pass a input, the list is filtered and mixed together.
-      The UI is still showing the lists as separated. But the items are mixed together in background.
-      Since, first we show the common-properties followed by filtered-properties. We can use matchSorter to sort the items.
-    */
+    onItemSelect: (prop) => saveAnimatableProperty(prop.name),
+    onChange: (value) => setInputValue(value ?? ""),
+
+    // We are splitting the items into two lists.
+    // But when users pass a input, the list is filtered and mixed together.
+    // The UI is still showing the lists as separated. But the items are mixed together in background.
+    // Since, first we show the properties on instance and then common-properties
+    // followed by filtered-properties. We can use matchSorter to sort the items.
+
     match: (search, itemsToFilter, itemToString) => {
       if (search === "") {
         return itemsToFilter;
@@ -91,9 +127,26 @@ export const TransitionProperty = ({
       const sortedItems = matchSorter(itemsToFilter, search, {
         keys: [itemToString],
         sorter: (rankedItems) =>
-          rankedItems.sort((a) =>
-            commonPropertiesSet.has(a.item.name) ? -1 : 1
-          ),
+          rankedItems.sort((a, b) => {
+            // Keep the proeprties on instance at the top
+            if (animatableDefinedProperties.has(a.item.name)) {
+              return -1;
+            }
+            if (animatableDefinedProperties.has(b.item.name)) {
+              return 1;
+            }
+
+            // Keep the common properties at the top as well
+            if (commonPropertiesSet.has(a.item.name)) {
+              return -1;
+            }
+            if (commonPropertiesSet.has(b.item.name)) {
+              return 1;
+            }
+
+            // Maintain original rank if neither is prioritized
+            return a.rank - b.rank;
+          }),
       });
 
       return sortedItems;
@@ -101,82 +154,98 @@ export const TransitionProperty = ({
   });
 
   const commonProperties = items.filter(
-    (item) => commonPropertiesSet.has(item.name) === true
+    (item) =>
+      commonPropertiesSet.has(item.name) === true &&
+      animatableDefinedProperties.has(item.name) === false
   );
-
   const filteredProperties = items.filter(
-    (item) => commonPropertiesSet.has(item.name) === false
+    (item) =>
+      commonPropertiesSet.has(item.name) === false &&
+      animatableDefinedProperties.has(item.name) === false
+  );
+  const propertiesDefinedOnInstance: Array<NameAndLabel> = items.filter(
+    (item) => animatableDefinedProperties.has(item.name)
   );
 
-  const renderItem = (item: NameAndLabel, index: number) => (
-    <ComboboxListboxItem
-      key={item.name}
-      {...getItemProps({
-        item,
-        index,
-      })}
-      selected={item.name === inputValue}
-    >
-      {item?.label ?? ""}
-    </ComboboxListboxItem>
-  );
+  const saveAnimatableProperty = (propertyName: string) => {
+    if (isAnimatableProperty(propertyName) === false) {
+      return;
+    }
+    setInputValue(propertyName);
+    onChange({ type: "unparsed", value: propertyName });
+  };
+
+  const renderItem = (item: NameAndLabel, index: number) => {
+    return (
+      <ComboboxListboxItem
+        {...getItemProps({
+          item,
+          index,
+        })}
+        key={item.name}
+        selected={item.name === inputValue}
+      >
+        {item?.label ?? ""}
+      </ComboboxListboxItem>
+    );
+  };
 
   return (
-    <>
-      <Flex align="center">
-        <Tooltip
-          variant="wrapped"
-          content={
-            <Flex gap="2" direction="column">
-              <Text variant="regularBold">Property</Text>
-              <Text variant="monoBold" color="moreSubtle">
-                transition-property
-              </Text>
-              <Text>
-                Sets the CSS properties that will be affected by the transition.
-              </Text>
-            </Flex>
-          }
-        >
-          <Label css={{ display: "inline" }}> Property </Label>
-        </Tooltip>
-      </Flex>
-      <ComboboxRoot open={isOpen}>
-        <div {...getComboboxProps()}>
-          <ComboboxAnchor>
-            <InputField
-              autoFocus
-              {...getInputProps({ onKeyDown: (e) => e.stopPropagation() })}
-              placeholder="all"
-              suffix={<NestedInputButton {...getToggleButtonProps()} />}
-            />
-          </ComboboxAnchor>
-          <ComboboxContent align="end" sideOffset={5}>
-            <ComboboxListbox {...getMenuProps()}>
-              <ComboboxScrollArea>
-                {isOpen && (
-                  <>
-                    <ComboboxLabel>Common</ComboboxLabel>
-                    {commonProperties.map(renderItem)}
-                    <ComboboxSeparator />
-                    {filteredProperties.map((property, index) =>
-                      /*
-                      When rendered in two different lists.
-                      We will have two indexes start at '0'. Which leads to
-                      - The same focus might be repeated when highlighted.
-                      - Using findIndex within getItemProps might make the focus jump around,
-                        as it searches the entire list for items.
-                        This happens because the list isn't sorted in order but is divided when rendering.
-                    */
-                      renderItem(property, commonProperties.length + index)
-                    )}
-                  </>
-                )}
-              </ComboboxScrollArea>
-            </ComboboxListbox>
-          </ComboboxContent>
-        </div>
-      </ComboboxRoot>
-    </>
+    <ComboboxRoot open={isOpen}>
+      <div {...getComboboxProps()}>
+        <ComboboxAnchor>
+          <InputField
+            autoFocus
+            {...getInputProps({
+              onKeyDown: (event) => {
+                if (event.key === "Enter") {
+                  saveAnimatableProperty(inputValue);
+                }
+                event.stopPropagation();
+              },
+            })}
+            placeholder="all"
+            suffix={<NestedInputButton {...getToggleButtonProps()} />}
+          />
+        </ComboboxAnchor>
+        <ComboboxContent align="end" sideOffset={5}>
+          <ComboboxListbox {...getMenuProps()}>
+            <ComboboxScrollArea>
+              {isOpen && (
+                <>
+                  {propertiesDefinedOnInstance.length > 0 && (
+                    <>
+                      <ComboboxLabel>Defined</ComboboxLabel>
+                      {propertiesDefinedOnInstance.map((property, index) =>
+                        renderItem(property, index)
+                      )}
+                      <ComboboxSeparator />
+                    </>
+                  )}
+
+                  <ComboboxLabel>Common</ComboboxLabel>
+                  {commonProperties.map((property, index) =>
+                    renderItem(
+                      property,
+                      propertiesDefinedOnInstance.length + index
+                    )
+                  )}
+                  <ComboboxSeparator />
+
+                  {filteredProperties.map((property, index) =>
+                    renderItem(
+                      property,
+                      propertiesDefinedOnInstance.length +
+                        commonProperties.length +
+                        index
+                    )
+                  )}
+                </>
+              )}
+            </ComboboxScrollArea>
+          </ComboboxListbox>
+        </ComboboxContent>
+      </div>
+    </ComboboxRoot>
   );
 };

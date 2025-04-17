@@ -1,4 +1,4 @@
-import type { PropMeta } from "@webstudio-is/react-sdk";
+import type { PropMeta } from "@webstudio-is/sdk";
 
 export const props: Record<string, PropMeta> = {
   about: { required: false, control: "text", type: "string" },
@@ -414,7 +414,7 @@ export const props: Record<string, PropMeta> = {
   },
   autoplay: {
     description:
-      "Whether to start playback of the video automatically. This feature might not work on all devices.",
+      "Whether to start playback of the video automatically. This feature might not work on all devices.\nSome browsers require the `muted` parameter to be set to `true` for autoplay to work.",
     required: false,
     control: "boolean",
     type: "boolean",
@@ -427,7 +427,6 @@ export const props: Record<string, PropMeta> = {
     required: false,
     control: "boolean",
     type: "boolean",
-    defaultValue: false,
   },
   className: { required: false, control: "text", type: "string" },
   color: {
@@ -709,11 +708,11 @@ export const props: Record<string, PropMeta> = {
     type: "string",
   },
   title: {
+    description:
+      'The `title` attribute for the iframe.\nImproves accessibility by providing a brief description of the video content for screen readers.\nExample: "Video about web development tips".',
     required: false,
     control: "text",
     type: "string",
-    description:
-      "Text to be displayed in a tooltip when hovering over the element.",
   },
   translate: {
     required: false,

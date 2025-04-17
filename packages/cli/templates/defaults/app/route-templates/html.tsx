@@ -1,4 +1,3 @@
-/* eslint-disable camelcase */
 import {
   type ServerRuntimeMetaFunction as MetaFunction,
   type LinksFunction,
@@ -10,31 +9,52 @@ import {
   redirect,
 } from "@remix-run/server-runtime";
 import { useLoaderData } from "@remix-run/react";
-import { ReactSdkContext } from "@webstudio-is/react-sdk";
 import {
-  n8nHandler,
+  isLocalResource,
+  loadResource,
+  loadResources,
   formIdFieldName,
   formBotFieldName,
-} from "@webstudio-is/form-handlers";
+} from "@webstudio-is/sdk/runtime";
 import {
+  ReactSdkContext,
+  PageSettingsMeta,
+  PageSettingsTitle,
+  PageSettingsCanonicalLink,
+} from "@webstudio-is/react-sdk/runtime";
+import {
+  projectId,
   Page,
   siteName,
   favIconAsset,
-  socialImageAsset,
   pageFontAssets,
   pageBackgroundImageAssets,
+  breakpoints,
 } from "__CLIENT__";
 import {
-  formsProperties,
-  loadResources,
+  getResources,
   getPageMeta,
   getRemixParams,
-  projectId,
   contactEmail,
 } from "__SERVER__";
-
+import { assetBaseUrl, imageLoader } from "__CONSTANTS__";
 import css from "__CSS__?url";
-import { assetBaseUrl, imageBaseUrl, imageLoader } from "../constants.mjs";
+import { sitemap } from "__SITEMAP__";
+
+const customFetch: typeof fetch = (input, init) => {
+  if (typeof input !== "string") {
+    return fetch(input, init);
+  }
+
+  if (isLocalResource(input, "sitemap.xml")) {
+    // @todo: dynamic import sitemap ???
+    const response = new Response(JSON.stringify(sitemap));
+    response.headers.set("content-type", "application/json; charset=utf-8");
+    return Promise.resolve(response);
+  }
+
+  return fetch(input, init);
+};
 
 export const loader = async (arg: LoaderFunctionArgs) => {
   const url = new URL(arg.request.url);
@@ -52,7 +72,10 @@ export const loader = async (arg: LoaderFunctionArgs) => {
     origin: url.origin,
   };
 
-  const resources = await loadResources({ system });
+  const resources = await loadResources(
+    customFetch,
+    getResources({ system }).data
+  );
   const pageMeta = getPageMeta({ system, resources });
 
   if (pageMeta.redirect) {
@@ -66,11 +89,14 @@ export const loader = async (arg: LoaderFunctionArgs) => {
   // typecheck
   arg.context.EXCLUDE_FROM_SEARCH satisfies boolean;
 
+  if (arg.context.EXCLUDE_FROM_SEARCH) {
+    pageMeta.excludePageFromSearch = arg.context.EXCLUDE_FROM_SEARCH;
+  }
+
   return json(
     {
       host,
       url: url.href,
-      excludeFromSearch: arg.context.EXCLUDE_FROM_SEARCH,
       system,
       resources,
       pageMeta,
@@ -97,33 +123,10 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (data === undefined) {
     return metas;
   }
-  const { pageMeta } = data;
-
-  if (data.url) {
-    metas.push({
-      property: "og:url",
-      content: data.url,
-    });
-  }
-
-  if (pageMeta.title) {
-    metas.push({ title: pageMeta.title });
-
-    metas.push({
-      property: "og:title",
-      content: pageMeta.title,
-    });
-  }
-
-  metas.push({ property: "og:type", content: "website" });
 
   const origin = `https://${data.host}`;
 
   if (siteName) {
-    metas.push({
-      property: "og:site_name",
-      content: siteName,
-    });
     metas.push({
       "script:ld+json": {
         "@context": "https://schema.org",
@@ -133,42 +136,6 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
       },
     });
   }
-
-  if (pageMeta.excludePageFromSearch || data.excludeFromSearch) {
-    metas.push({
-      name: "robots",
-      content: "noindex, nofollow",
-    });
-  }
-
-  if (pageMeta.description) {
-    metas.push({
-      name: "description",
-      content: pageMeta.description,
-    });
-    metas.push({
-      property: "og:description",
-      content: pageMeta.description,
-    });
-  }
-
-  if (socialImageAsset) {
-    metas.push({
-      property: "og:image",
-      content: `https://${data.host}${imageLoader({
-        src: socialImageAsset.name,
-        // Do not transform social image (not enough information do we need to do this)
-        format: "raw",
-      })}`,
-    });
-  } else if (pageMeta.socialImageUrl) {
-    metas.push({
-      property: "og:image",
-      content: pageMeta.socialImageUrl,
-    });
-  }
-
-  metas.push(...pageMeta.custom);
 
   return metas;
 };
@@ -185,7 +152,7 @@ export const links: LinksFunction = () => {
     result.push({
       rel: "icon",
       href: imageLoader({
-        src: favIconAsset.name,
+        src: `${assetBaseUrl}${favIconAsset}`,
         // width,height must be multiple of 48 https://developers.google.com/search/docs/appearance/favicon-in-search
         width: 144,
         height: 144,
@@ -200,7 +167,7 @@ export const links: LinksFunction = () => {
   for (const asset of pageFontAssets) {
     result.push({
       rel: "preload",
-      href: `${assetBaseUrl}${asset.name}`,
+      href: `${assetBaseUrl}${asset}`,
       as: "font",
       crossOrigin: "anonymous",
     });
@@ -209,7 +176,7 @@ export const links: LinksFunction = () => {
   for (const backgroundImageAsset of pageBackgroundImageAssets) {
     result.push({
       rel: "preload",
-      href: `${assetBaseUrl}${backgroundImageAsset.name}`,
+      href: `${assetBaseUrl}${backgroundImageAsset}`,
       as: "image",
     });
   }
@@ -220,19 +187,6 @@ export const links: LinksFunction = () => {
 const getRequestHost = (request: Request): string =>
   request.headers.get("x-forwarded-host") || request.headers.get("host") || "";
 
-const getMethod = (value: string | undefined) => {
-  if (value === undefined) {
-    return "post";
-  }
-
-  switch (value.toLowerCase()) {
-    case "get":
-      return "get";
-    default:
-      return "post";
-  }
-};
-
 export const action = async ({
   request,
   context,
@@ -240,13 +194,22 @@ export const action = async ({
   { success: true } | { success: false; errors: string[] }
 > => {
   try {
+    const url = new URL(request.url);
+    url.host = getRequestHost(request);
+
     const formData = await request.formData();
 
-    const formId = formData.get(formIdFieldName);
+    const system = {
+      params: {},
+      search: {},
+      origin: url.origin,
+    };
 
-    if (formId == null || typeof formId !== "string") {
-      throw new Error("No form id in FormData");
-    }
+    const resourceName = formData.get(formIdFieldName);
+    let resource =
+      typeof resourceName === "string"
+        ? getResources({ system }).action.get(resourceName)
+        : undefined;
 
     const formBotValue = formData.get(formBotFieldName);
 
@@ -266,45 +229,32 @@ export const action = async ({
       throw new Error(`Form bot value invalid ${formBotValue}`);
     }
 
-    const formProperties = formsProperties.get(formId);
+    formData.delete(formIdFieldName);
+    formData.delete(formBotFieldName);
 
-    // form properties are not defined when defaults are used
-    const { action, method } = formProperties ?? {};
-
-    if (contactEmail === undefined) {
-      throw new Error("Contact email not found");
-    }
-
-    const pageUrl = new URL(request.url);
-    pageUrl.host = getRequestHost(request);
-
-    if (action !== undefined) {
-      try {
-        // Test that action is full URL
-        new URL(action);
-      } catch {
-        throw new Error(
-          "Invalid action URL, must be valid http/https protocol"
-        );
+    if (resource) {
+      resource.body = Object.fromEntries(formData);
+    } else {
+      if (contactEmail === undefined) {
+        throw new Error("Contact email not found");
       }
+
+      resource = context.getDefaultActionResource?.({
+        url,
+        projectId,
+        contactEmail,
+        formData,
+      });
     }
 
-    const formInfo = {
-      formData,
-      projectId,
-      action: action ?? null,
-      method: getMethod(method),
-      pageUrl: pageUrl.toString(),
-      toEmail: contactEmail,
-      fromEmail: pageUrl.hostname + "@webstudio.email",
-    } as const;
-
-    const result = await n8nHandler({
-      formInfo,
-      hookUrl: context.N8N_FORM_EMAIL_HOOK,
-    });
-
-    return result;
+    if (resource === undefined) {
+      throw Error("Resource not found");
+    }
+    const { ok, statusText } = await loadResource(fetch, resource);
+    if (ok) {
+      return { success: true };
+    }
+    return { success: false, errors: [statusText] };
   } catch (error) {
     console.error(error);
 
@@ -316,18 +266,28 @@ export const action = async ({
 };
 
 const Outlet = () => {
-  const { system, resources, url } = useLoaderData<typeof loader>();
+  const { system, resources, url, pageMeta, host } =
+    useLoaderData<typeof loader>();
   return (
     <ReactSdkContext.Provider
       value={{
         imageLoader,
         assetBaseUrl,
-        imageBaseUrl,
         resources,
+        breakpoints,
       }}
     >
       {/* Use the URL as the key to force scripts in HTML Embed to reload on dynamic pages */}
       <Page key={url} system={system} />
+      <PageSettingsMeta
+        url={url}
+        pageMeta={pageMeta}
+        host={host}
+        siteName={siteName}
+        imageLoader={imageLoader}
+      />
+      <PageSettingsTitle>{pageMeta.title}</PageSettingsTitle>
+      <PageSettingsCanonicalLink href={url} />
     </ReactSdkContext.Provider>
   );
 };

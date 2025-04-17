@@ -1,21 +1,75 @@
-import { expect, test } from "@jest/globals";
+import ts from "typescript";
+import { expect, test } from "vitest";
 import stripIndent from "strip-indent";
-import { createScope, type DataSource } from "@webstudio-is/sdk";
+import {
+  createScope,
+  ROOT_INSTANCE_ID,
+  SYSTEM_VARIABLE_ID,
+  WsComponentMeta,
+} from "@webstudio-is/sdk";
 import {
   $,
   ActionValue,
   AssetValue,
-  ExpressionValue,
   PageValue,
-  ParameterValue,
+  Parameter,
+  ResourceValue,
+  Variable,
   createProxy,
-  renderJsx,
+  expression,
+  renderData,
   ws,
-} from "@webstudio-is/sdk/testing";
+} from "@webstudio-is/template";
 import {
   generateJsxChildren,
   generateWebstudioComponent,
 } from "./component-generator";
+
+const isValidJSX = (code: string): boolean => {
+  // Create a "virtual" TypeScript program
+  const compilerHost = ts.createCompilerHost({});
+  const fileName = "virtual.tsx";
+
+  compilerHost.getSourceFile = (filename) => {
+    if (filename === fileName) {
+      return ts.createSourceFile(
+        filename,
+        code,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TSX
+      );
+    }
+    return undefined;
+  };
+
+  const program = ts.createProgram(
+    [fileName],
+    {
+      jsx: ts.JsxEmit.React,
+      strict: true,
+    },
+    compilerHost
+  );
+
+  const sourceFile = program.getSourceFile(fileName);
+
+  if (!sourceFile) {
+    return false;
+  }
+
+  const diagnostics = [
+    ...program.getSyntacticDiagnostics(sourceFile),
+    // ...program.getSemanticDiagnostics(sourceFile),
+  ];
+
+  return diagnostics.length === 0;
+};
+
+const validateJSX = (code: string) => {
+  expect(isValidJSX(code)).toBeTruthy();
+  return code;
+};
 
 const clear = (input: string) =>
   stripIndent(input).trimStart().replace(/ +$/, "");
@@ -27,36 +81,34 @@ test("generate jsx element with children and without them", () => {
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "body" }],
-      ...renderJsx(<$.Body ws:id="body">Children</$.Body>),
+      ...renderData(<$.Body ws:id="body">Children</$.Body>),
     })
   ).toEqual(
-    clear(`
-      <Body
-      data-ws-id="body"
-      data-ws-component="Body">
+    validateJSX(
+      clear(`
+      <Body>
       {"Children"}
       </Body>
     `)
+    )
   );
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "image" }],
-      ...renderJsx(<$.Image ws:id="image"></$.Image>),
+      ...renderData(<$.Image ws:id="image"></$.Image>),
     })
   ).toEqual(
-    clear(`
-      <Image
-      data-ws-id="image"
-      data-ws-component="Image" />
+    validateJSX(
+      clear(`
+      <Image />
     `)
+    )
   );
 });
 
@@ -65,34 +117,32 @@ test("generate jsx element with namespaces components", () => {
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "body" }],
-      ...renderJsx(<library.Body ws:id="body"></library.Body>),
+      ...renderData(<library.Body ws:id="body"></library.Body>),
     })
   ).toEqual(
-    clear(`
-      <Body
-      data-ws-id="body"
-      data-ws-component="@webstudio-is/library:Body" />
+    validateJSX(
+      clear(`
+      <Body />
     `)
+    )
   );
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "image" }],
-      ...renderJsx(<library.Image ws:id="image"></library.Image>),
+      ...renderData(<library.Image ws:id="image"></library.Image>),
     })
   ).toEqual(
-    clear(`
-      <Image
-      data-ws-id="image"
-      data-ws-component="@webstudio-is/library:Image" />
+    validateJSX(
+      clear(`
+      <Image />
     `)
+    )
   );
 });
 
@@ -100,29 +150,27 @@ test("generate jsx element with literal props", () => {
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "body" }],
-      ...renderJsx(<$.Body ws:id="body" string="string" number={0}></$.Body>),
+      ...renderData(<$.Body ws:id="body" string="string" number={0}></$.Body>),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       <Body
-      data-ws-id="body"
-      data-ws-component="Body"
       string={"string"}
       number={0} />
     `)
+    )
   );
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "image" }],
-      ...renderJsx(
+      ...renderData(
         <$.Image
           ws:id="image"
           boolean={true}
@@ -131,13 +179,13 @@ test("generate jsx element with literal props", () => {
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       <Image
-      data-ws-id="image"
-      data-ws-component="Image"
       boolean={true}
       stringArray={["value1","value2"]} />
     `)
+    )
   );
 });
 
@@ -145,11 +193,10 @@ test("ignore asset and page props", () => {
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "box" }],
-      ...renderJsx(
+      ...renderData(
         <$.Box
           ws:id="box"
           page={new PageValue("pageId")}
@@ -158,52 +205,43 @@ test("ignore asset and page props", () => {
       ),
     })
   ).toEqual(
-    clear(`
-      <Box
-      data-ws-id="box"
-      data-ws-component="Box" />
+    validateJSX(
+      clear(`
+      <Box />
     `)
+    )
   );
 });
 
 test("generate jsx element with data sources and action", () => {
+  const variable = new Variable("variable", 0);
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: toMap([
-        {
-          type: "variable",
-          id: "variableId",
-          name: "variableName",
-          value: { type: "number", value: 0 },
-        },
-      ]),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "box" }],
-      ...renderJsx(
+      ...renderData(
         <$.Box
           ws:id="box"
-          variable={new ExpressionValue("$ws$dataSource$variableId")}
-          expression={new ExpressionValue(`$ws$dataSource$variableId + 1`)}
-          onChange={
-            new ActionValue(["value"], `$ws$dataSource$variableId = value`)
-          }
+          variable={expression`${variable}`}
+          expression={expression`${variable} + 1`}
+          onChange={new ActionValue(["value"], expression`${variable} = value`)}
         ></$.Box>
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       <Box
-      data-ws-id="box"
-      data-ws-component="Box"
-      variable={variableName}
-      expression={variableName + 1}
+      variable={variable}
+      expression={variable + 1}
       onChange={(value: any) => {
-      variableName = value
-      set$variableName(variableName)
+      variable = value
+      set$variable(variable)
       }} />
     `)
+    )
   );
 });
 
@@ -211,78 +249,46 @@ test("generate jsx element with condition based on show prop", () => {
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "box" }],
-      ...renderJsx(<$.Box ws:id="box" data-ws-show={true}></$.Box>),
+      ...renderData(<$.Box ws:id="box" data-ws-show={true}></$.Box>),
     })
   ).toEqual(
-    clear(`
-      <Box
-      data-ws-id="box"
-      data-ws-component="Box" />
+    validateJSX(
+      clear(`
+      <Box />
     `)
+    )
   );
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "box" }],
-      ...renderJsx(<$.Box ws:id="box" data-ws-show={false}></$.Box>),
+      ...renderData(<$.Box ws:id="box" data-ws-show={false}></$.Box>),
     })
   ).toEqual("");
+  const condition = new Variable("condition", false);
   expect(
     generateJsxChildren({
       scope: createScope(),
-      dataSources: toMap([
-        {
-          type: "variable",
-          id: "conditionId",
-          name: "conditionName",
-          value: { type: "boolean", value: false },
-        },
-      ]),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
       children: [{ type: "id", value: "box" }],
-      ...renderJsx(
-        <$.Box
-          ws:id="box"
-          data-ws-show={new ExpressionValue("$ws$dataSource$conditionId")}
-        ></$.Box>
+      ...renderData(
+        <$.Box ws:id="box" data-ws-show={expression`${condition}`}></$.Box>
       ),
     })
   ).toEqual(
-    clear(`
-      {(conditionName) &&
-      <Box
-      data-ws-id="box"
-      data-ws-component="Box" />
+    validateJSX(
+      clear(`
+      {(condition) &&
+      <Box />
       }
     `)
-  );
-});
-
-test("generate jsx element with index prop", () => {
-  expect(
-    generateJsxChildren({
-      scope: createScope(),
-      dataSources: new Map(),
-      usedDataSources: new Map(),
-      indexesWithinAncestors: new Map([["box", 5]]),
-      children: [{ type: "id", value: "box" }],
-      ...renderJsx(<$.Box ws:id="box"></$.Box>),
-    })
-  ).toEqual(
-    clear(`
-      <Box
-      data-ws-id="box"
-      data-ws-component="Box"
-      data-ws-index="5" />
-    `)
+    )
   );
 });
 
@@ -301,12 +307,14 @@ test("generate jsx children with text", () => {
       indexesWithinAncestors: new Map(),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       {"Some"}
       <br />
       {"text"}
       {"Escaped \\"text\\""}
     `)
+    )
   );
 });
 
@@ -326,9 +334,11 @@ test("exclude text placeholders", () => {
       excludePlaceholders: true,
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       {"Text"}
     `)
+    )
   );
 });
 
@@ -354,9 +364,11 @@ test("generate jsx children with expression", () => {
       indexesWithinAncestors: new Map(),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       {'Hello ' + myvar}
     `)
+    )
   );
 });
 
@@ -365,10 +377,9 @@ test("generate jsx children with nested instances", () => {
     generateJsxChildren({
       scope: createScope(),
       children: [{ type: "id", value: "form" }],
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      ...renderData(
         <$.Form ws:id="form" prop="value">
           <$.Input></$.Input>
           <$.Button></$.Button>
@@ -376,19 +387,15 @@ test("generate jsx children with nested instances", () => {
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
     <Form
-    data-ws-id="form"
-    data-ws-component="Form"
     prop={"value"}>
-    <Input
-    data-ws-id="0"
-    data-ws-component="Input" />
-    <Button
-    data-ws-id="1"
-    data-ws-component="Button" />
+    <Input />
+    <Button />
     </Form>
     `)
+    )
   );
 });
 
@@ -401,10 +408,9 @@ test("deduplicate base and namespaced components with same short name", () => {
         { type: "id", value: "button1" },
         { type: "id", value: "button2" },
       ],
-      dataSources: new Map(),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      ...renderData(
         <$.Fragment>
           <$.Button ws:id="button1"></$.Button>
           <radix.Button ws:id="button2"></radix.Button>
@@ -413,70 +419,45 @@ test("deduplicate base and namespaced components with same short name", () => {
     })
   ).toEqual(
     clear(`
-    <Button
-    data-ws-id="button1"
-    data-ws-component="Button" />
-    <Button_1
-    data-ws-id="button2"
-    data-ws-component="@webstudio-is/sdk-component-react-radix:Button" />
+    <Button />
+    <Button_1 />
     `)
   );
 });
 
 test("generate collection component as map", () => {
+  const data = new Variable("data", ["apple", "orange", "mango"]);
+  const element = new Parameter("element");
   expect(
     generateJsxChildren({
       scope: createScope(),
       children: [{ type: "id", value: "list" }],
-      dataSources: toMap([
-        {
-          id: "dataSourceList",
-          scopeInstanceId: "list",
-          type: "variable",
-          name: "data",
-          value: { type: "json", value: ["apple", "orange", "mango"] },
-        },
-        {
-          id: "dataSourceItem",
-          scopeInstanceId: "list",
-          type: "variable",
-          name: "element",
-          value: { type: "json", value: `` },
-        },
-      ]),
       usedDataSources: new Map(),
       indexesWithinAncestors: new Map(),
-      ...renderJsx(
-        <ws.collection
-          ws:id="list"
-          data={new ExpressionValue("$ws$dataSource$dataSourceList")}
-          item={new ParameterValue("dataSourceItem")}
-        >
+      ...renderData(
+        <ws.collection ws:id="list" data={expression`${data}`} item={element}>
           <$.Label></$.Label>
-          <$.Button
-            aria-label={new ExpressionValue("$ws$dataSource$dataSourceItem")}
-          ></$.Button>
+          <$.Button aria-label={expression`${element}`}></$.Button>
         </ws.collection>
       ),
     })
   ).toEqual(
-    clear(`
-    {data?.map((element: any, index: number) =>
+    validateJSX(
+      clear(`
+    {data?.map?.((element: any, index: number) =>
     <Fragment key={index}>
-    <Label
-    data-ws-id="0"
-    data-ws-component="Label" />
+    <Label />
     <Button
-    data-ws-id="1"
-    data-ws-component="Button"
     aria-label={element} />
     </Fragment>
     )}
     `)
+    )
   );
 });
 
 test("generate component with variables and actions", () => {
+  const variable = new Variable("variable", "initial");
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -484,44 +465,57 @@ test("generate component with variables and actions", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: toMap([
-        {
-          type: "variable",
-          id: "variableId",
-          name: "variableName",
-          value: { type: "string", value: "initial" },
-        },
-      ]),
-      indexesWithinAncestors: new Map([["input", 0]]),
-      ...renderJsx(
+      metas: new Map(),
+      ...renderData(
         <$.Body ws:id="body">
           <$.Input
-            value={new ExpressionValue("$ws$dataSource$variableId")}
+            value={expression`${variable}`}
             onChange={
-              new ActionValue(["value"], `$ws$dataSource$variableId = value`)
+              new ActionValue(["value"], expression`${variable} = value`)
             }
           />
         </$.Body>
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
       const Page = () => {
-      let [variableName, set$variableName] = useState<any>("initial")
-      return <Body
-      data-ws-id="body"
-      data-ws-component="Body">
+      let [variable, set$variable] = useVariableState<any>("initial")
+      return <Body>
       <Input
-      data-ws-id="0"
-      data-ws-component="Input"
-      value={variableName}
+      value={variable}
       onChange={(value: any) => {
-      variableName = value
-      set$variableName(variableName)
+      variable = value
+      set$variable(variable)
       }} />
       </Body>
       }
     `)
+    )
+  );
+});
+
+test("merge classes if no className", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map([["body", ["cls1"]]]),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(<$.Body ws:id="body"></$.Body>),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+        const Page = () => {
+        return <Body
+        className={\`cls1\`} />
+        }
+    `)
+    )
   );
 });
 
@@ -533,23 +527,22 @@ test("add classes and merge classes", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: new Map(),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(<$.Body ws:id="body" className='cls2 "cls3"'></$.Body>),
+      metas: new Map(),
+      ...renderData(<$.Body ws:id="body" className='cls2 "cls3"'></$.Body>),
     })
   ).toEqual(
-    clear(`
-    const Page = () => {
-    return <Body
-    data-ws-id="body"
-    data-ws-component="Body"
-    className="cls1 cls2 \\"cls3\\"" />
-    }
+    validateJSX(
+      clear(`
+        const Page = () => {
+        return <Body
+        className={\`cls1 \${"cls2 \\"cls3\\""}\`} />
+        }
     `)
+    )
   );
 });
 
-test("avoid generating collection parameter variable as state", () => {
+test("add classes", () => {
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -557,50 +550,100 @@ test("avoid generating collection parameter variable as state", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: toMap([
-        {
-          id: "dataSourceList",
-          scopeInstanceId: "list",
-          type: "variable",
-          name: "data",
-          value: { type: "json", value: ["apple", "orange", "mango"] },
-        },
-        {
-          id: "dataSourceItem",
-          scopeInstanceId: "list",
-          type: "parameter",
-          name: "element",
-        },
-      ]),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      metas: new Map(),
+      ...renderData(<$.Body ws:id="body" className='cls2 "cls3"'></$.Body>),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+        const Page = () => {
+        return <Body
+        className={\`\${"cls2 \\"cls3\\""}\`} />
+        }
+    `)
+    )
+  );
+});
+
+test("add bind classes and merge classes", () => {
+  const hasClass2 = new Variable("variableName", false);
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map([["body", ["cls1"]]]),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body
+          ws:id="body"
+          className={expression`${hasClass2} ? 'cls2' : ''`}
+        ></$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+        const Page = () => {
+        let [variableName, set$variableName] = useVariableState<any>(false)
+        return <Body
+        className={\`cls1 \${variableName ? 'cls2' : ''}\`} />
+        }
+    `)
+    )
+  );
+});
+
+test("avoid generating collection parameter variable as state", () => {
+  const data = new Variable("data", ["apple", "orange", "mango"]);
+  const element = new Parameter("element");
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
         <$.Body ws:id="body">
           <ws.collection
             ws:id="list"
-            data={new ExpressionValue("$ws$dataSource$dataSourceList")}
-            item={new ParameterValue("dataSourceItem")}
+            data={expression`${data}`}
+            item={element}
           ></ws.collection>
         </$.Body>
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
     const Page = () => {
-    let [data, set$data] = useState<any>(["apple","orange","mango"])
-    return <Body
-    data-ws-id="body"
-    data-ws-component="Body">
-    {data?.map((element: any, index: number) =>
+    let [data, set$data] = useVariableState<any>(["apple","orange","mango"])
+    return <Body>
+    {data?.map?.((element: any, index: number) =>
     <Fragment key={index}>
     </Fragment>
     )}
     </Body>
     }
     `)
+    )
   );
 });
 
-test("generate system variable when present", () => {
+test("generate both page system and global system variables when present", () => {
+  const system = new Parameter("system");
+  const data = renderData(
+    <$.Body
+      ws:id="body"
+      data-page={expression`${system}.params.slug`}
+      data-global={expression`$ws$system.params.slug`}
+    ></$.Body>
+  );
+  expect(data.dataSources.size).toEqual(1);
+  const [pageSystemVariableId] = data.dataSources.keys();
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -609,42 +652,45 @@ test("generate system variable when present", () => {
       rootInstanceId: "body",
       parameters: [
         {
-          id: "pathSystemPropId",
+          id: "pathSystemPropId1",
           type: "parameter",
           instanceId: "",
           name: "system",
-          value: "systemId",
+          value: pageSystemVariableId,
+        },
+        {
+          id: "pathSystemPropId2",
+          type: "parameter",
+          instanceId: "",
+          name: "system",
+          value: SYSTEM_VARIABLE_ID,
         },
       ],
-      dataSources: toMap([
-        {
-          id: "systemId",
-          scopeInstanceId: "body",
-          type: "parameter",
-          name: "system",
-        },
-      ]),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
-        <$.Body
-          ws:id="body"
-          data-slug={new ExpressionValue("$ws$dataSource$systemId.params.slug")}
-        ></$.Body>
-      ),
+      metas: new Map(),
+      ...data,
     })
   ).toEqual(
-    clear(`
-    const Page = ({ system: system_1, }: { system: any; }) => {
+    validateJSX(
+      clear(`
+    const Page = (_props: { system: any; }) => {
+    const system_1 = _props.system;
+    const system_2 = _props.system;
     return <Body
-    data-ws-id="body"
-    data-ws-component="Body"
-    data-slug={system_1?.params?.slug} />
+    data-page={system_1?.params?.slug}
+    data-global={system_2?.params?.slug} />
     }
     `)
+    )
   );
 });
 
 test("generate resources loading", () => {
+  const dataVariable = new Variable("data", "data");
+  const dataResource = new ResourceValue("data", {
+    url: expression`""`,
+    method: "get",
+    headers: [],
+  });
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -652,49 +698,52 @@ test("generate resources loading", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: toMap([
-        {
-          id: "dataSourceDataId",
-          scopeInstanceId: "body",
-          type: "variable",
-          name: "data",
-          value: { type: "json", value: "data" },
-        },
-        {
-          id: "dataSourceResourceId",
-          scopeInstanceId: "body",
-          type: "resource",
-          name: "data",
-          resourceId: "resourceId",
-        },
-      ]),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      metas: new Map(),
+      ...renderData(
         <$.Body
           ws:id="body"
-          data-data={new ExpressionValue("$ws$dataSource$dataSourceDataId")}
-          data-resource={
-            new ExpressionValue("$ws$dataSource$dataSourceResourceId")
-          }
+          data-data={expression`${dataVariable}`}
+          data-resource={expression`${dataResource}`}
         ></$.Body>
       ),
     })
   ).toEqual(
-    clear(`
+    validateJSX(
+      clear(`
     const Page = () => {
-    let [data, set$data] = useState<any>("data")
+    let [data, set$data] = useVariableState<any>("data")
     let data_1 = useResource("data_2")
     return <Body
-    data-ws-id="body"
-    data-ws-component="Body"
     data-data={data}
     data-resource={data_1} />
     }
     `)
+    )
   );
 });
 
 test("avoid generating unused variables", () => {
+  const usedVariable = new Variable("Used Variable Name", "initial");
+  const unusedVariable = new Variable("Unused Variable Name", "initial");
+  const unusedParameter = new Parameter("Unused Parameter Name");
+  const unusedResource = new ResourceValue("Unused Resource Name", {
+    url: expression`""`,
+    method: "get",
+    headers: [],
+  });
+  const data = renderData(
+    <$.Body
+      ws:id="body"
+      data-used={expression`${usedVariable}`}
+      data-unused={expression`${unusedVariable} ${unusedParameter} ${unusedResource}`}
+    ></$.Body>
+  );
+  expect(Array.from(data.props.values())).toEqual([
+    expect.objectContaining({ name: "data-used" }),
+    expect.objectContaining({ name: "data-unused" }),
+  ]);
+  // make variables unused
+  data.props.delete(Array.from(data.props.values())[1].id);
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -710,50 +759,14 @@ test("avoid generating unused variables", () => {
           value: "unusedParameterId",
         },
       ],
-      dataSources: toMap([
-        {
-          id: "usedVariableId",
-          scopeInstanceId: "body",
-          name: "Used Variable Name",
-          type: "variable",
-          value: { type: "string", value: "initial" },
-        },
-        {
-          id: "unusedVariableId",
-          scopeInstanceId: "body",
-          name: "Unused Variable Name",
-          type: "variable",
-          value: { type: "string", value: "initial" },
-        },
-        {
-          id: "unusedParameterId",
-          scopeInstanceId: "body",
-          name: "Unused Parameter Name",
-          type: "parameter",
-        },
-        {
-          id: "unusedResourceVariableId",
-          scopeInstanceId: "body",
-          name: "Unused Resource Name",
-          type: "resource",
-          resourceId: "resourceId",
-        },
-      ]),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
-        <$.Body
-          ws:id="body"
-          data-data={new ExpressionValue("$ws$dataSource$usedVariableId")}
-        ></$.Body>
-      ),
+      metas: new Map(),
+      ...data,
     })
   ).toMatchInlineSnapshot(`
-"const Page = ({ }: { system: any; }) => {
-let [UsedVariableName, set$UsedVariableName] = useState<any>("initial")
+"const Page = (_props: { system: any; }) => {
+let [UsedVariableName, set$UsedVariableName] = useVariableState<any>("initial")
 return <Body
-data-ws-id="body"
-data-ws-component="Body"
-data-data={UsedVariableName} />
+data-used={UsedVariableName} />
 }
 "
 `);
@@ -767,9 +780,8 @@ test("avoid generating descendant component", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: new Map(),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      metas: new Map(),
+      ...renderData(
         <$.Body ws:id="body">
           <ws.descendant></ws.descendant>
         </$.Body>
@@ -777,9 +789,7 @@ test("avoid generating descendant component", () => {
     })
   ).toMatchInlineSnapshot(`
 "const Page = () => {
-return <Body
-data-ws-id="body"
-data-ws-component="Body">
+return <Body>
 </Body>
 }
 "
@@ -787,6 +797,8 @@ data-ws-component="Body">
 });
 
 test("generate conditional collection", () => {
+  const condition = new Variable("condition", false);
+  const collectionItem = new Parameter("collectionItem");
   expect(
     generateWebstudioComponent({
       classesMap: new Map(),
@@ -794,49 +806,632 @@ test("generate conditional collection", () => {
       name: "Page",
       rootInstanceId: "body",
       parameters: [],
-      dataSources: toMap<DataSource>([
-        {
-          id: "conditionId",
-          scopeInstanceId: "list",
-          name: "conditionName",
-          type: "variable",
-          value: { type: "boolean", value: false },
-        },
-        {
-          id: "collectionItemId",
-          scopeInstanceId: "list",
-          name: "collectionItemName",
-          type: "parameter",
-        },
-      ]),
-      indexesWithinAncestors: new Map(),
-      ...renderJsx(
+      metas: new Map(),
+      ...renderData(
         <$.Body ws:id="body">
           <ws.collection
             ws:id="list"
-            data-ws-show={new ExpressionValue("$ws$dataSource$conditionId")}
+            data-ws-show={expression`${condition}`}
             data={[]}
-            item={new ParameterValue("collectionItemId")}
+            item={collectionItem}
           ></ws.collection>
         </$.Body>
       ),
     })
   ).toMatchInlineSnapshot(`
+"const Page = () => {
+let [condition, set$condition] = useVariableState<any>(false)
+return <Body>
+{(condition) &&
+<>
+{[]?.map?.((collectionItem: any, index: number) =>
+<Fragment key={index}>
+</Fragment>
+)}
+</>
+}
+</Body>
+}
+"
+`);
+});
+
+test("generate conditional body", () => {
+  const condition = new Variable("condition", false);
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body" data-ws-show={expression`${condition}`}></$.Body>
+      ),
+    })
+  ).toMatchInlineSnapshot(`
+"const Page = () => {
+let [condition, set$condition] = useVariableState<any>(false)
+return (condition) &&
+<Body />
+
+}
+"
+`);
+});
+
+test("generate resource prop", () => {
+  const myResource = new ResourceValue("myResource", {
+    url: expression`"https://my-url.com?with-secret"`,
+    method: "get",
+    headers: [],
+  });
+  const anotherResource = new ResourceValue("anotherResource", {
+    url: expression`"https://another-url.com?with-secret"`,
+    method: "get",
+    headers: [],
+  });
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body">
+          <$.Form ws:id="form1" action={myResource}></$.Form>
+          <$.Form ws:id="form2" action={anotherResource}></$.Form>
+        </$.Body>
+      ),
+    })
+  ).toMatchInlineSnapshot(`
     "const Page = () => {
-    let [conditionName, set$conditionName] = useState<any>(false)
-    return <Body
-    data-ws-id="body"
-    data-ws-component="Body">
-    {(conditionName) &&
-    <>
-    {[]?.map((collectionItemName: any, index: number) =>
-    <Fragment key={index}>
-    </Fragment>
-    )}
-    </>
-    }
+    return <Body>
+    <Form
+    action={"action"} />
+    <Form
+    action={"action_1"} />
     </Body>
     }
     "
-    `);
+  `);
+});
+
+test("skip unsafe properties", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body
+          ws:id="body"
+          {...{
+            "": "unsafe",
+            "1-numeric-unsafe": "unsafe",
+            "click.prevent": "unsafe",
+          }}
+        ></$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+        const Page = () => {
+        return <Body />
+        }
+    `)
+    )
+  );
+});
+
+test("variable names can be js identifiers", () => {
+  const variable = new Variable("switch", "initial");
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body">
+          <$.Input
+            value={expression`${variable}`}
+            onChange={
+              new ActionValue(["value"], expression`${variable} = value`)
+            }
+          />
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      let [switch_, set$switch] = useVariableState<any>("initial")
+      return <Body>
+      <Input
+      value={switch_}
+      onChange={(value: any) => {
+      switch_ = value
+      set$switch(switch_)
+      }} />
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("renders nothing if only templates are present in block", () => {
+  const BlockTemplate = ws["block-template"];
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body">
+          <ws.block ws:id="block">
+            <BlockTemplate>
+              <$.Box>Test</$.Box>
+            </BlockTemplate>
+          </ws.block>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("renders only block children", () => {
+  const BlockTemplate = ws["block-template"];
+
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body">
+          <ws.block ws:id="block">
+            <BlockTemplate>
+              <$.Box>Test</$.Box>
+            </BlockTemplate>
+            <$.Box>Child0</$.Box>
+          </ws.block>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Box>
+      {"Child0"}
+      </Box>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("generate unset variables as undefined", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="body">
+          <$.Box>{expression`a + b`}</$.Box>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Box>
+      {undefined + undefined}
+      </Box>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("generate global variables", () => {
+  const rootVariable = new Variable("rootVariable", "root");
+  const data = renderData(
+    <ws.root ws:id={ROOT_INSTANCE_ID} vars={expression`${rootVariable}`}>
+      <$.Body ws:id="body">
+        <$.Box>{expression`${rootVariable}`}</$.Box>
+      </$.Body>
+    </ws.root>
+  );
+  data.instances.delete(ROOT_INSTANCE_ID);
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...data,
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      let [rootVariable, set$rootVariable] = useVariableState<any>("root")
+      return <Body>
+      <Box>
+      {rootVariable}
+      </Box>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("ignore unused global variables", () => {
+  const rootVariable = new Variable("rootVariable", "root");
+  const data = renderData(
+    <ws.root ws:id={ROOT_INSTANCE_ID} vars={expression`${rootVariable}`}>
+      <$.Body ws:id="body">
+        <$.Box></$.Box>
+      </$.Body>
+    </ws.root>
+  );
+  data.instances.delete(ROOT_INSTANCE_ID);
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map(),
+      ...data,
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Box />
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("generate prop with index within ancestor", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "body",
+      parameters: [],
+      metas: new Map<string, WsComponentMeta>([
+        [
+          "TabsTrigger",
+          { type: "container", icon: "", indexWithinAncestor: "Tabs" },
+        ],
+        [
+          "TabsContent",
+          { type: "container", icon: "", indexWithinAncestor: "Tabs" },
+        ],
+      ]),
+      ...renderData(
+        <$.Body ws:id="body">
+          <$.Tabs>
+            <$.TabsList>
+              <$.TabsTrigger></$.TabsTrigger>
+              <$.Box>
+                <$.TabsTrigger></$.TabsTrigger>
+              </$.Box>
+            </$.TabsList>
+            <$.Box>
+              <$.TabsContent></$.TabsContent>
+            </$.Box>
+            <$.TabsContent></$.TabsContent>
+          </$.Tabs>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Tabs>
+      <TabsList>
+      <TabsTrigger
+      data-ws-index="0" />
+      <Box>
+      <TabsTrigger
+      data-ws-index="1" />
+      </Box>
+      </TabsList>
+      <Box>
+      <TabsContent
+      data-ws-index="0" />
+      </Box>
+      <TabsContent
+      data-ws-index="1" />
+      </Tabs>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("ignore ws:block-template when generate index attribute", () => {
+  const BlockTemplate = ws["block-template"];
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map<string, WsComponentMeta>([
+        [
+          "TabsTrigger",
+          { type: "container", icon: "", indexWithinAncestor: "Tabs" },
+        ],
+      ]),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <$.Tabs>
+            <BlockTemplate>
+              <$.TabsTrigger></$.TabsTrigger>
+            </BlockTemplate>
+            <$.Box>
+              <$.TabsTrigger></$.TabsTrigger>
+            </$.Box>
+            <$.TabsTrigger></$.TabsTrigger>
+          </$.Tabs>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Tabs>
+      <Box>
+      <TabsTrigger
+      data-ws-index="0" />
+      </Box>
+      <TabsTrigger
+      data-ws-index="1" />
+      </Tabs>
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("render empty component when no instances found", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(<$.Body ws:id="bodyId"></$.Body>),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <></>
+      }
+    `)
+    )
+  );
+});
+
+test("render tag property on components", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <$.Box ws:id="spanId" ws:tag="span"></$.Box>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+      const Page = () => {
+      return <Body>
+      <Box
+      data-ws-tag="span" />
+      </Body>
+      }
+    `)
+    )
+  );
+});
+
+test("render ws:element component with div tag by default", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <ws.element id="element1">
+            <ws.element id="element2"></ws.element>
+          </ws.element>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+       const Page = () => {
+       return <Body>
+       <div
+       id={"element1"}>
+       <div
+       id={"element2"} />
+       </div>
+       </Body>
+       }
+     `)
+    )
+  );
+});
+
+test("render ws:element component with ws:tag", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <ws.element ws:tag="p" id="paragraph">
+            <ws.element ws:tag="span" id="span"></ws.element>
+          </ws.element>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+       const Page = () => {
+       return <Body>
+       <p
+       id={"paragraph"}>
+       <span
+       id={"span"} />
+       </p>
+       </Body>
+       }
+     `)
+    )
+  );
+});
+
+test("convert attributes to react compatible when render ws:element", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <ws.element
+            class="my-class"
+            for="my-id"
+            autocomplete="off"
+          ></ws.element>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+       const Page = () => {
+       return <Body>
+       <div
+       htmlFor={"my-id"}
+       autoComplete={"off"}
+       className={\`\${"my-class"}\`} />
+       </Body>
+       }
+     `)
+    )
+  );
+});
+
+test("ignore props similar to standard attributes on react components", () => {
+  expect(
+    generateWebstudioComponent({
+      classesMap: new Map(),
+      scope: createScope(),
+      name: "Page",
+      rootInstanceId: "bodyId",
+      parameters: [],
+      metas: new Map(),
+      ...renderData(
+        <$.Body ws:id="bodyId">
+          <$.Box class="my-class" for="my-id" autocomplete="off"></$.Box>
+        </$.Body>
+      ),
+    })
+  ).toEqual(
+    validateJSX(
+      clear(`
+       const Page = () => {
+       return <Body>
+       <Box
+       class={"my-class"}
+       for={"my-id"}
+       autocomplete={"off"} />
+       </Body>
+       }
+     `)
+    )
+  );
 });

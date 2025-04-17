@@ -4,39 +4,39 @@ const isMac =
   typeof navigator === "object" ? /mac/i.test(navigator.platform) : false;
 
 const shortcutSymbolMap: Record<string, string> = {
-  cmd: "⌘",
-  ctrl: "⌃",
+  meta: isMac ? "⌘" : "Ctrl",
   shift: "⇧",
-  option: "⌥",
+  alt: isMac ? "⌥" : "Alt",
   backspace: "⌫",
-  click: "+click",
+  enter: "↵",
+  tab: isMac ? "tab" : "Tab",
+  click: isMac ? "+click" : "+ Click",
+  "click[0]": isMac ? "click" : "Click",
 };
 
-const shortcutWinMap: Record<string, string> = {
-  cmd: "ctrl",
-};
-
-type ShortcutDefinition = Array<string>;
-
-// @todo check what linux needs
-// Converts commands to OS specific equivalent, e.g. cmd on mac to ctrl on win
-const mapToOs = (value: ShortcutDefinition) => {
-  if (isMac) {
-    return value;
-  }
-  return value.map((key) => shortcutWinMap[key] || key);
-};
+type ShortcutDefinition = ReadonlyArray<string>;
 
 const format = (value: ShortcutDefinition) => {
-  return mapToOs(value).map(
-    (shortcut) => shortcutSymbolMap[shortcut] ?? shortcut.toUpperCase()
+  return value.map(
+    (shortcut, index) =>
+      shortcutSymbolMap[`${shortcut}[${index}]`] ??
+      shortcutSymbolMap[shortcut] ??
+      shortcut.toUpperCase()
   );
 };
 
-export const Kbd = ({ value }: { value: ShortcutDefinition }) => {
+export const Kbd = ({
+  value,
+  color = "subtle",
+  variant,
+}: {
+  value: ShortcutDefinition;
+  color?: "subtle" | "moreSubtle" | "contrast";
+  variant?: "regular";
+}) => {
   return (
-    <Text color="subtle" as="kbd">
-      {format(value)}
+    <Text color={color} variant={variant} as="kbd">
+      {format(value).join(isMac ? "" : " ")}
     </Text>
   );
 };

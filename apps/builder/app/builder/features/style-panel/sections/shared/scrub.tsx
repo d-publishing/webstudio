@@ -1,18 +1,16 @@
+import { useState, useEffect, useRef } from "react";
 import type {
-  StyleProperty,
+  CssProperty,
   StyleValue,
   UnitValue,
 } from "@webstudio-is/css-engine";
+import { toValue } from "@webstudio-is/css-engine";
 import { numericScrubControl } from "@webstudio-is/design-system";
-import { useState, useEffect, useRef } from "react";
+import { isValidDeclaration } from "@webstudio-is/css-data";
 import { useModifierKeys } from "../../shared/modifier-keys";
 import type { StyleUpdateOptions } from "../../shared/use-style-data";
-import type { SpaceStyleProperty } from "../space/types";
-import { isValidDeclaration } from "@webstudio-is/css-data";
 import { parseIntermediateOrInvalidValue } from "../../shared/css-value-input/parse-intermediate-or-invalid-value";
-import { toValue } from "@webstudio-is/css-engine";
 import type { CssValueInputValue } from "../../shared/css-value-input/css-value-input";
-import type { PositionProperty } from "../position/position-layout";
 
 type ScrubStatus<P extends string> = {
   isActive: boolean;
@@ -34,7 +32,7 @@ type HoverTarget<P> = {
   element: HTMLElement | SVGElement;
 };
 
-export const useScrub = <P extends StyleProperty>(props: {
+export const useScrub = <P extends CssProperty>(props: {
   value?: StyleValue;
   target: HoverTarget<P> | undefined;
   getModifiersGroup: (
@@ -63,7 +61,7 @@ export const useScrub = <P extends StyleProperty>(props: {
   const nonDependencies = useRef({ props, values, properties });
   nonDependencies.current = { props, values, properties };
 
-  const unitRef = useRef<UnitValue["unit"]>();
+  const unitRef = useRef<undefined | UnitValue["unit"]>(undefined);
 
   useEffect(() => {
     if (finalTarget === undefined) {
@@ -153,53 +151,4 @@ export const useScrub = <P extends StyleProperty>(props: {
     properties,
     values,
   };
-};
-
-const opposingSpaceGroups = [
-  ["paddingTop", "paddingBottom"],
-  ["paddingRight", "paddingLeft"],
-  ["marginTop", "marginBottom"],
-  ["marginRight", "marginLeft"],
-] as const;
-
-const circleSpaceGroups = [
-  ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft"],
-  ["marginTop", "marginRight", "marginBottom", "marginLeft"],
-] as const;
-
-export const getSpaceModifiersGroup = (
-  property: SpaceStyleProperty,
-  modifiers: { shiftKey: boolean; altKey: boolean }
-) => {
-  let groups: ReadonlyArray<ReadonlyArray<SpaceStyleProperty>> = [];
-
-  if (modifiers.shiftKey) {
-    groups = circleSpaceGroups;
-  } else if (modifiers.altKey) {
-    groups = opposingSpaceGroups;
-  }
-
-  return groups.find((group) => group.includes(property)) ?? [property];
-};
-
-const opposingPositionGroups = [
-  ["top", "bottom"],
-  ["left", "right"],
-] as const;
-
-const circlePositionGroups = [["top", "right", "bottom", "left"]] as const;
-
-export const getPositionModifiersGroup = (
-  property: PositionProperty,
-  modifiers: { shiftKey: boolean; altKey: boolean }
-) => {
-  let groups: ReadonlyArray<ReadonlyArray<PositionProperty>> = [];
-
-  if (modifiers.shiftKey) {
-    groups = circlePositionGroups;
-  } else if (modifiers.altKey) {
-    groups = opposingPositionGroups;
-  }
-
-  return groups.find((group) => group.includes(property)) ?? [property];
 };

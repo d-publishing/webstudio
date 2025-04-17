@@ -1,124 +1,92 @@
-import { CollapsibleSectionRoot } from "~/builder/shared/collapsible-section";
-import type { SectionProps } from "../shared/section";
-import type { LayersValue, StyleProperty } from "@webstudio-is/css-engine";
-import { useState } from "react";
 import {
-  SectionTitle,
-  SectionTitleButton,
-  SectionTitleLabel,
-  Tooltip,
-  Flex,
-  Text,
-} from "@webstudio-is/design-system";
-import { parseCssValue } from "@webstudio-is/css-data";
-import { PropertyName } from "../../shared/property-name";
-import { getStyleSource } from "../../shared/style-info";
-import { getDots } from "../../shared/collapsible-section";
-import { InfoCircleIcon, PlusIcon } from "@webstudio-is/icons";
-import { addLayer } from "../../style-layer-utils";
-import { LayersList } from "../../style-layers-list";
+  toValue,
+  type CssProperty,
+  type StyleValue,
+} from "@webstudio-is/css-engine";
+import { Tooltip, Flex, Text } from "@webstudio-is/design-system";
+import { InfoCircleIcon } from "@webstudio-is/icons";
+import { humanizeString } from "~/shared/string-utils";
+import { RepeatedStyleSection } from "../../shared/style-section";
 import { FilterSectionContent } from "../../shared/filter-content";
+import { parseCssFragment } from "../../shared/css-fragment";
+import {
+  addRepeatedStyleItem,
+  editRepeatedStyleItem,
+  RepeatedStyle,
+} from "../../shared/repeated-style";
+import { useComputedStyleDecl } from "../../shared/model";
 
-export const properties = ["backdropFilter"] satisfies Array<StyleProperty>;
+export const properties = ["backdrop-filter"] satisfies [
+  CssProperty,
+  ...CssProperty[],
+];
 
-const property: StyleProperty = properties[0];
 const label = "Backdrop Filters";
 const initialBackdropFilter = "blur(0px)";
 
-export const Section = (props: SectionProps) => {
-  const { currentStyle, deleteProperty } = props;
-  const [isOpen, setIsOpen] = useState(true);
-  const value = currentStyle[property]?.value;
-  const sectionStyleSource =
-    value?.type === "unparsed" || value?.type === "guaranteedInvalid"
-      ? undefined
-      : getStyleSource(currentStyle[property]);
+const getItemProps = (_index: number, value: StyleValue) => {
+  const label =
+    value.type === "function"
+      ? `${humanizeString(value.name)}: ${toValue(value.args)}`
+      : "Unknown filter";
+  return { label };
+};
+
+export const Section = () => {
+  const styleDecl = useComputedStyleDecl("backdrop-filter");
 
   return (
-    <CollapsibleSectionRoot
-      fullWidth
+    <RepeatedStyleSection
       label={label}
-      isOpen={isOpen}
-      onOpenChange={setIsOpen}
-      trigger={
-        <SectionTitle
-          dots={getDots(currentStyle, properties)}
-          suffix={
-            <Tooltip content={"Add a backdrop-filter"}>
-              <SectionTitleButton
-                prefix={<PlusIcon />}
-                onClick={() => {
-                  addLayer(
-                    property,
-                    parseCssValue(
-                      property,
-                      initialBackdropFilter
-                    ) as LayersValue,
-                    currentStyle,
-                    props.createBatchUpdate
-                  );
-                  setIsOpen(true);
-                }}
-              />
-            </Tooltip>
-          }
-        >
-          <PropertyName
-            title={label}
-            style={currentStyle}
-            properties={properties}
-            description="Backdrop filters are similar to filters, but are applied to the area behind an element. This can be useful for creating frosted glass effects."
-            label={
-              <SectionTitleLabel color={sectionStyleSource}>
-                {label}
-              </SectionTitleLabel>
-            }
-            onReset={() => deleteProperty(property)}
-          />
-        </SectionTitle>
-      }
+      description="Backdrop filters are similar to filters, but are applied to the area behind an element. This can be useful for creating frosted glass effects."
+      properties={properties}
+      onAdd={() => {
+        addRepeatedStyleItem(
+          [styleDecl],
+          parseCssFragment(initialBackdropFilter, ["backdrop-filter"])
+        );
+      }}
     >
-      {value?.type === "tuple" && value.value.length > 0 && (
-        <LayersList
-          {...props}
-          property={property}
-          value={value}
-          label={label}
-          deleteProperty={deleteProperty}
-          renderContent={(layerProps) => {
-            if (layerProps.layer.type !== "function") {
-              return <></>;
-            }
-
-            return (
-              <FilterSectionContent
-                {...layerProps}
-                property={property}
-                layer={layerProps.layer}
-                tooltip={
-                  <Tooltip
-                    variant="wrapped"
-                    content={
-                      <Flex gap="2" direction="column">
-                        <Text variant="regularBold">{label}</Text>
-                        <Text variant="monoBold">backdrop-filter</Text>
-                        <Text>
-                          Applies graphical effects like blur or color shift to
-                          the area behind an element
-                          <br /> <br />
-                          <Text variant="mono">{initialBackdropFilter}</Text>
-                        </Text>
-                      </Flex>
-                    }
-                  >
-                    <InfoCircleIcon />
-                  </Tooltip>
+      <RepeatedStyle
+        label={label}
+        styles={[styleDecl]}
+        getItemProps={getItemProps}
+        renderItemContent={(index, primaryValue) => (
+          <FilterSectionContent
+            index={index}
+            property="backdrop-filter"
+            propertyValue={toValue(primaryValue)}
+            layer={primaryValue}
+            onEditLayer={(index, value, options) => {
+              editRepeatedStyleItem(
+                [styleDecl],
+                index,
+                new Map([["backdrop-filter", value]]),
+                options
+              );
+            }}
+            tooltip={
+              <Tooltip
+                variant="wrapped"
+                content={
+                  <Flex gap="2" direction="column">
+                    <Text variant="regularBold">{label}</Text>
+                    <Text variant="monoBold">backdrop-filter</Text>
+                    <Text>
+                      Applies graphical effects like blur or color shift to the
+                      area behind an element
+                      <br /> <br />
+                      <Text variant="mono">{initialBackdropFilter}</Text>
+                    </Text>
+                  </Flex>
                 }
-              />
-            );
-          }}
-        />
-      )}
-    </CollapsibleSectionRoot>
+              >
+                <InfoCircleIcon />
+              </Tooltip>
+            }
+          />
+        )}
+      />
+    </RepeatedStyleSection>
   );
 };

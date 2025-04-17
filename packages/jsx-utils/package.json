@@ -8,15 +8,13 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "vitest run"
   },
   "devDependencies": {
-    "@jest/globals": "^29.7.0",
-    "@webstudio-is/jest-config": "workspace:^",
     "@webstudio-is/tsconfig": "workspace:^",
-    "fast-glob": "^3.2.12",
-    "type-fest": "^4.3.1",
-    "typescript": "5.5.2"
+    "fast-glob": "^3.3.2",
+    "type-fest": "^4.37.0",
+    "vitest": "^3.0.8"
   },
   "exports": {
     ".": {
@@ -30,11 +28,10 @@
   "sideEffects": false,
   "dependencies": {
     "@webstudio-is/css-data": "workspace:*",
-    "@webstudio-is/react-sdk": "workspace:*",
     "@webstudio-is/sdk": "workspace:*",
-    "acorn": "^8.11.3",
+    "acorn": "^8.14.1",
     "acorn-jsx": "^5.3.2",
     "json5": "^2.2.3",
-    "zod": "^3.22.4"
+    "zod": "^3.24.2"
   }
 }

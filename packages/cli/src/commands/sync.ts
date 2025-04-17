@@ -5,7 +5,7 @@ import pc from "picocolors";
 import { spinner } from "@clack/prompts";
 import {
   loadProjectDataByBuildId,
-  loadProjectDataById,
+  loadProjectDataByProjectId,
   type Data,
 } from "@webstudio-is/http-client";
 import { createFileIfNotExists, isFileExists } from "../fs-utils";
@@ -40,31 +40,22 @@ export const sync = async (
   options: StrictYargsOptionsToInterface<typeof syncOptions>
 ) => {
   const syncing = spinner();
-  syncing.start("Synchronizing project data");
-
-  const definedOptionValues = [
-    options.buildId,
-    options.origin,
-    options.authToken,
-  ].filter(Boolean);
-
-  if (definedOptionValues.length > 0 && definedOptionValues.length < 3) {
-    syncing.stop(`Please provide buildId, origin and authToken`, 2);
-    return;
-  }
 
   let project: Data | undefined;
+  syncing.start(`Synchronizing project data`);
 
   if (
     options.buildId !== undefined &&
     options.origin !== undefined &&
     options.authToken !== undefined
   ) {
+    syncing.message(`Synchronizing project data from ${options.origin}`);
     project = await loadProjectDataByBuildId({
       buildId: options.buildId,
-      authToken: options.authToken,
+      seviceToken: options.authToken,
       origin: options.origin,
     });
+    project.origin = options.origin;
   } else {
     const globalConfigText = await readFile(GLOBAL_CONFIG_FILE, "utf-8");
     const globalConfig = jsonToGlobalConfig(JSON.parse(globalConfigText));
@@ -95,17 +86,27 @@ export const sync = async (
     }
 
     const { origin, token } = projectConfig;
+    syncing.message(`Synchronizing project data from ${origin}`);
 
     try {
-      project = await loadProjectDataById({
-        projectId: localConfig.projectId,
-        authToken: token,
-        origin,
-      });
+      project =
+        options.buildId !== undefined
+          ? await loadProjectDataByBuildId({
+              buildId: options.buildId,
+              authToken: token,
+              origin,
+            })
+          : await loadProjectDataByProjectId({
+              projectId: localConfig.projectId,
+              authToken: token,
+              origin,
+            });
+      project.origin = origin;
     } catch (error) {
       // catch errors about unpublished project
       syncing.stop((error as Error).message, 2);
-      return;
+
+      throw error;
     }
   }
 

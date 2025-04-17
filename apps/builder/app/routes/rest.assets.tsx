@@ -10,6 +10,9 @@ import {
 } from "@webstudio-is/asset-uploader/index.server";
 import { createContext } from "~/shared/context.server";
 import env from "~/env/env.server";
+import { preventCrossOriginCookie } from "~/services/no-cross-origin-cookie";
+import { checkCsrf } from "~/services/csrf-session.server";
+import { parseError } from "~/shared/error/error-parse";
 
 export const loader = async ({
   params,
@@ -23,11 +26,14 @@ export const loader = async ({
 };
 
 export const action = async (props: ActionFunctionArgs) => {
-  const { request } = props;
-
-  const context = await createContext(request);
-
   try {
+    preventCrossOriginCookie(props.request);
+    await checkCsrf(props.request);
+
+    const { request } = props;
+
+    const context = await createContext(request);
+
     if (request.method === "POST") {
       const formData = await request.formData();
       const projectId = formData.get("projectId") as string;
@@ -50,11 +56,10 @@ export const action = async (props: ActionFunctionArgs) => {
       };
     }
   } catch (error) {
-    if (error instanceof Error) {
-      console.error({ error });
-      return {
-        errors: error.message,
-      };
-    }
+    console.error(error);
+
+    return {
+      errors: parseError(error).message,
+    };
   }
 };

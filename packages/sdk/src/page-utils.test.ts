@@ -1,4 +1,4 @@
-import { describe, expect, test } from "@jest/globals";
+import { describe, expect, test } from "vitest";
 import type { Pages } from "./schema/pages";
 import {
   findPageByIdOrPath,
@@ -14,7 +14,6 @@ const pages = {
     name: "Home",
     title: "Home",
     rootInstanceId: "rootInstanceId",
-    systemDataSourceId: "systemDataSourceId",
     meta: {},
   },
   pages: [
@@ -24,7 +23,6 @@ const pages = {
       name: "Page",
       title: "Page",
       rootInstanceId: "rootInstanceId",
-      systemDataSourceId: "systemDataSourceId",
       meta: {},
     },
   ],

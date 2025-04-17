@@ -1,6 +1,6 @@
-import { useState, useMemo, type ComponentProps } from "react";
+import { useState, useMemo, type JSX } from "react";
 import * as SelectPrimitive from "@radix-ui/react-select";
-import type { Unit } from "@webstudio-is/css-engine";
+import type { CssProperty, Unit } from "@webstudio-is/css-engine";
 import {
   SelectScrollUpButton,
   SelectScrollDownButton,
@@ -23,57 +23,63 @@ export type UnitOption =
   | { id: string; label: string; type: "keyword" };
 
 type UseUnitSelectType = {
-  property: string;
+  property: CssProperty;
   value: CssValueInputValue;
-  size: ComponentProps<typeof NestedInputButton>["size"];
   onChange: (
     value: { type: "unit"; value: Unit } | { type: "keyword"; value: string }
   ) => void;
   onCloseAutoFocus: (event: Event) => void;
+  options?: UnitOption[];
 };
 
 export const useUnitSelect = ({
   property,
   value,
-  size,
   onChange,
   onCloseAutoFocus,
-}: UseUnitSelectType): [boolean, JSX.Element | null] => {
+  options: unitOptions,
+}: UseUnitSelectType): [boolean, JSX.Element | undefined] => {
   const [isOpen, setIsOpen] = useState(false);
+
+  const options = useMemo(
+    () =>
+      unitOptions ?? buildOptions(property, value, nestedSelectButtonUnitless),
+    [property, value, unitOptions]
+  );
 
   const unit =
     value.type === "unit" || value.type === "intermediate"
       ? value.unit
       : undefined;
 
-  const options = useMemo(
-    () => buildOptions(property, value, nestedSelectButtonUnitless),
-    [property, value]
-  );
-
-  if (options.length === 0) {
-    return [isOpen, null];
-  }
-
-  const unitOrKeyword: string | undefined =
+  const unitOrKeywordValue: string | undefined =
     unit ?? (value.type === "keyword" ? value.value : undefined);
+
+  if (
+    options.length === 0 ||
+    value.type === "var" ||
+    value.type === "unparsed" ||
+    value.type === "invalid" ||
+    unitOrKeywordValue === undefined
+  ) {
+    return [isOpen, undefined];
+  }
 
   const select = (
     <UnitSelect
-      size={size}
-      value={unitOrKeyword}
+      value={unitOrKeywordValue}
       label={unit ?? nestedSelectButtonUnitless}
       options={options}
       open={isOpen}
       onCloseAutoFocus={onCloseAutoFocus}
       onOpenChange={setIsOpen}
-      onChange={(unitOption) => {
-        if (unitOption.type === "keyword") {
-          onChange({ type: "keyword", value: unitOption.id });
+      onChange={(option) => {
+        if (option.type === "keyword") {
+          onChange({ type: "keyword", value: option.id });
           return;
         }
 
-        onChange({ type: "unit", value: unitOption.id });
+        onChange({ type: "unit", value: option.id });
       }}
     />
   );
@@ -89,7 +95,6 @@ type UnitSelectProps = {
   onOpenChange: (open: boolean) => void;
   onCloseAutoFocus: (event: Event) => void;
   open: boolean;
-  size: UseUnitSelectType["size"];
 };
 
 const UnitSelect = ({
@@ -100,7 +105,6 @@ const UnitSelect = ({
   onOpenChange,
   onCloseAutoFocus,
   open,
-  size,
 }: UnitSelectProps) => {
   return (
     <SelectPrimitive.Root
@@ -116,7 +120,7 @@ const UnitSelect = ({
       open={open}
     >
       <SelectPrimitive.SelectTrigger asChild>
-        <NestedInputButton tabIndex={-1} size={size}>
+        <NestedInputButton tabIndex={-1}>
           <SelectPrimitive.Value>
             {value === "number" ? nestedSelectButtonUnitless : label}
           </SelectPrimitive.Value>

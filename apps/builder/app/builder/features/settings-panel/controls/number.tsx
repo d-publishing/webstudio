@@ -9,12 +9,12 @@ import {
   type ControlProps,
   useLocalValue,
   ResponsiveLayout,
-  Label,
   updateExpressionValue,
   $selectedInstanceScope,
   useBindingState,
+  humanizeAttribute,
 } from "../shared";
-import { humanizeString } from "~/shared/string-utils";
+import { PropertyLabel } from "../property-label";
 
 export const NumberControl = ({
   meta,
@@ -22,8 +22,6 @@ export const NumberControl = ({
   propName,
   computedValue,
   onChange,
-  deletable,
-  onDelete,
 }: ControlProps<"number">) => {
   const id = useId();
 
@@ -45,7 +43,7 @@ export const NumberControl = ({
     }
   );
 
-  const label = humanizeString(meta.label || propName);
+  const label = humanizeAttribute(meta.label || propName);
   const { scope, aliases } = useStore($selectedInstanceScope);
   const expression =
     prop?.type === "expression" ? prop.value : JSON.stringify(computedValue);
@@ -56,16 +54,8 @@ export const NumberControl = ({
   return (
     <ResponsiveLayout
       label={
-        <Label
-          htmlFor={id}
-          description={meta.description}
-          readOnly={overwritable === false}
-        >
-          {label}
-        </Label>
+        <PropertyLabel name={propName} readOnly={overwritable === false} />
       }
-      deletable={deletable}
-      onDelete={onDelete}
     >
       <BindingControl>
         <InputField

@@ -1,8 +1,6 @@
-import { camelCase } from "change-case";
 import {
   type InvalidValue,
   type TupleValue,
-  type FunctionValue,
   toValue,
   StyleValue,
 } from "@webstudio-is/css-engine";
@@ -16,18 +14,15 @@ import {
   Select,
   Grid,
 } from "@webstudio-is/design-system";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type JSX } from "react";
 import {
   CssValueInputContainer,
   type IntermediateStyleValue,
 } from "../shared/css-value-input";
 import { parseCssValue } from "@webstudio-is/css-data";
-import type {
-  DeleteProperty,
-  StyleUpdateOptions,
-} from "../shared/use-style-data";
+import type { StyleUpdateOptions } from "../shared/use-style-data";
 import { ShadowContent } from "./shadow-content";
-import { parseCssFragment } from "./parse-css-fragment";
+import { parseCssFragment } from "./css-fragment";
 
 // filters can't be validated directly in the css-engine. Because, these are not properties
 // but functions that proeprties accept. So, we need to validate them manually using fake proeprties
@@ -44,7 +39,7 @@ import { parseCssFragment } from "./parse-css-fragment";
 const filterFunctions = {
   // https://developer.mozilla.org/en-US/docs/Web/CSS/filter-function/blur#syntax
   // length
-  blur: { default: "0px", fakeProperty: "outlineOffset" },
+  blur: { default: "0px", fakeProperty: "outline-offset" },
   // https://developer.mozilla.org/en-US/docs/Web/CSS/filter-function/brightness#formal_syntax
   // number | percentage
   brightness: { default: "0%", fakeProperty: "opacity" },
@@ -55,7 +50,7 @@ const filterFunctions = {
   // and pass the args as value and property
   "drop-shadow": {
     default: "0px 2px 5px rgba(0, 0, 0, 0.2)",
-    fakeProperty: "textShadow",
+    fakeProperty: "text-shadow",
   },
   // https://developer.mozilla.org/en-US/docs/Web/CSS/filter-function/grayscale#syntax
   // number  | percentage
@@ -79,8 +74,8 @@ const filterFunctions = {
 
 type FilterContentProps = {
   index: number;
-  property: "filter" | "backdropFilter";
-  layer: FunctionValue;
+  property: "filter" | "backdrop-filter";
+  layer: StyleValue;
   propertyValue: string;
   tooltip: JSX.Element;
   onEditLayer: (
@@ -88,7 +83,6 @@ type FilterContentProps = {
     layers: TupleValue,
     options: StyleUpdateOptions
   ) => void;
-  deleteProperty: DeleteProperty;
 };
 
 type FilterFunction = keyof typeof filterFunctions;
@@ -101,7 +95,6 @@ export const FilterSectionContent = ({
   property,
   propertyValue,
   onEditLayer,
-  deleteProperty,
   tooltip,
   layer,
 }: FilterContentProps) => {
@@ -116,7 +109,11 @@ export const FilterSectionContent = ({
   >(undefined);
 
   useEffect(() => {
-    if (isFilterFunction(layer.name) === false || layer.args.type !== "tuple") {
+    if (
+      layer.type !== "function" ||
+      isFilterFunction(layer.name) === false ||
+      layer.args.type !== "tuple"
+    ) {
       return;
     }
 
@@ -152,7 +149,7 @@ export const FilterSectionContent = ({
     value: string,
     options: StyleUpdateOptions = { isEphemeral: false }
   ) => {
-    const parsed = parseCssFragment(value, camelCase(property));
+    const parsed = parseCssFragment(value, [property]);
     const parsedValue = parsed.get(property);
     const invalid = parsedValue === undefined || parsedValue.type === "invalid";
     setIntermediateValue({
@@ -166,12 +163,10 @@ export const FilterSectionContent = ({
 
   return (
     <Flex direction="column">
-      <Flex direction="column" css={{ px: theme.spacing[9] }}>
+      <Flex direction="column" gap="2" css={{ padding: theme.panel.padding }}>
         <Grid
           gap="2"
           css={{
-            marginTop: theme.spacing[5],
-            paddingBottom: theme.spacing[5],
             gridTemplateColumns: "1fr 3fr",
             alignItems: "center",
           }}
@@ -191,8 +186,6 @@ export const FilterSectionContent = ({
           <Grid
             gap="2"
             css={{
-              marginTop: theme.spacing[5],
-              paddingBottom: theme.spacing[5],
               gridTemplateColumns: "1fr 3fr",
               alignItems: "center",
             }}
@@ -205,7 +198,7 @@ export const FilterSectionContent = ({
               property={
                 filterFunction
                   ? filterFunctions[filterFunction].fakeProperty
-                  : "outlineOffset"
+                  : "outline-offset"
               }
               styleSource="local"
               value={
@@ -215,39 +208,34 @@ export const FilterSectionContent = ({
                   unit: "px",
                 }
               }
-              keywords={[]}
-              setValue={handleFilterFunctionValueChange}
-              deleteProperty={deleteProperty}
+              onUpdate={handleFilterFunctionValueChange}
+              onDelete={() => {}}
             />
           </Grid>
         ) : undefined}
       </Flex>
 
-      {filterFunction === "drop-shadow" && layer.args.type === "tuple" ? (
+      {filterFunction === "drop-shadow" && layer.type === "function" && (
         <ShadowContent
           index={index}
-          property="textShadow"
+          property="drop-shadow"
           layer={layer.args}
-          tooltip={<></>}
           propertyValue={toValue(layer.args)}
+          hideCodeEditor={true}
           onEditLayer={(_, dropShadowLayers, options) => {
             handleComplete(
               `drop-shadow(${toValue(dropShadowLayers)})`,
               options
             );
           }}
-          deleteProperty={() => {}}
-          hideCodeEditor={true}
         />
-      ) : undefined}
+      )}
 
       <Separator css={{ gridAutoColumns: "span 2" }} />
       <Flex
         direction="column"
         css={{
-          px: theme.spacing[9],
-          paddingTop: theme.spacing[5],
-          paddingBottom: theme.spacing[9],
+          padding: theme.panel.padding,
           gap: theme.spacing[3],
           minWidth: theme.spacing[30],
         }}
@@ -278,12 +266,6 @@ export const FilterSectionContent = ({
               // On pressing Enter, the textarea is creating a new line.
               // In-order to prevent it and update the content.
               // We prevent the default behaviour
-              event.preventDefault();
-            }
-
-            if (event.key === "Escape") {
-              deleteProperty(property, { isEphemeral: true });
-              setIntermediateValue(undefined);
               event.preventDefault();
             }
           }}

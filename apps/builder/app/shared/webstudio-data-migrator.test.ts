@@ -1,4 +1,4 @@
-import { expect, test } from "@jest/globals";
+import { expect, test } from "vitest";
 import type { WebstudioData } from "@webstudio-is/sdk";
 import { createDefaultPages } from "@webstudio-is/project-build";
 import type { StyleProperty } from "@webstudio-is/css-engine";
@@ -7,7 +7,6 @@ import { migrateWebstudioDataMutable } from "./webstudio-data-migrator";
 const emptyData: WebstudioData = {
   pages: createDefaultPages({
     rootInstanceId: "rootInstanceId",
-    systemDataSourceId: "systemDataSourceId",
   }),
   assets: new Map(),
   dataSources: new Map(),

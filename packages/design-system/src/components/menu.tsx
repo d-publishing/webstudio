@@ -24,11 +24,14 @@ import {
 } from "@radix-ui/react-dropdown-menu";
 import { CheckMarkIcon, DotIcon } from "@webstudio-is/icons";
 import type { ComponentProps } from "react";
+import { truncate } from "../utilities";
 
 export const labelCss = css(textVariants.titles, {
   color: theme.colors.foregroundMain,
   mx: theme.spacing[3],
   padding: theme.spacing[3],
+  order: 1,
+  ...truncate(),
 });
 
 const indicatorSize = theme.spacing[9];
@@ -58,9 +61,10 @@ export const menuItemCss = css({
   borderRadius: theme.borderRadius[3],
   // override button default styles
   backgroundColor: "transparent",
-  "&:focus, &[data-found], &[aria-selected=true], &[data-state=open]": {
-    backgroundColor: theme.colors.backgroundItemMenuItemHover,
-  },
+  "&:focus, &[data-found], &[aria-selected=true], &[data-state=open], &[data-state=checked]:is(:hover,:focus)":
+    {
+      backgroundColor: theme.colors.backgroundItemMenuItemHover,
+    },
   "&[data-disabled], &[aria-disabled], &[disabled]": {
     color: theme.colors.foregroundDisabled,
   },
@@ -114,8 +118,10 @@ export const MenuItemButton = styled("button", menuItemCss, {
 
 export const separatorCss = css({
   height: 1,
+  minHeight: 1,
   my: theme.spacing[3],
   backgroundColor: theme.colors.borderMain,
+  order: 1,
 });
 
 const menuPadding = theme.spacing[3];
@@ -170,7 +176,7 @@ const setIconStyle = css({
 });
 
 // Icon for the "checked" state from Figma
-export const MenuCheckedIcon = () => <CheckMarkIcon />;
+export const MenuCheckedIcon = () => <CheckMarkIcon size={12} />;
 
 // Icon for the "checked and set" state from Figma
 export const MenuCheckedAndSetIcon = () => (
